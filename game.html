@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SoundGuess – Jugar</title>
+  <link rel="stylesheet" href="css/theme.css" />
+  <link rel="stylesheet" href="css/game.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="navbar">
+    <a href="index.html" class="nav-brand">
+      <span class="brand-icon">◈</span>
+      <span class="brand-name">SoundGuess</span>
+    </a>
+    <div class="nav-links">
+      <a href="index.html" class="nav-link">Inicio</a>
+      <a href="game.html" class="nav-link active">Jugar</a>
+      <a href="config.html" class="nav-link">Ajustes</a>
+    </div>
+  </nav>
+
+  <main class="game-main">
+
+    <!-- ══════════ SCREEN: Lobby ══════════ -->
+    <div id="screenLobby" class="game-screen">
+      <div class="lobby-wrap">
+        <div class="lobby-hero">
+          <span class="lobby-icon">◈</span>
+          <h1 class="lobby-title">¿Listo para jugar?</h1>
+          <p class="lobby-sub">Elige una playlist y pon a prueba tus oídos</p>
+        </div>
+
+        <div class="lobby-playlists" id="lobbyPlaylists">
+          <!-- Injected by JS -->
+          <div class="empty-state" id="lobbyEmpty">
+            <span class="empty-icon">🎧</span>
+            <p>Crea una playlist con canciones en <a href="index.html">Inicio</a> para poder jugar.</p>
+          </div>
+        </div>
+
+        <div class="lobby-actions" id="lobbyActions" style="display:none;">
+          <div class="selected-playlist-info" id="selectedPlaylistInfo">
+            <!-- Injected by JS -->
+          </div>
+          <button id="startGameBtn" class="btn btn-primary btn-large">▶ Empezar partida</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ SCREEN: Game ══════════ -->
+    <div id="screenGame" class="game-screen hidden">
+
+      <!-- HUD -->
+      <div class="game-hud">
+        <div class="hud-block">
+          <span class="hud-label">Canción</span>
+          <span class="hud-val" id="hudSong">1 / 20</span>
+        </div>
+        <div class="hud-block hud-score">
+          <span class="hud-label">Puntos</span>
+          <span class="hud-val hud-score-val" id="hudScore">0</span>
+        </div>
+        <div class="hud-block">
+          <span class="hud-label">Racha</span>
+          <span class="hud-val hud-streak" id="hudStreak">🔥 0</span>
+        </div>
+        <div class="hud-block hud-timer-block hidden" id="hudTimerBlock">
+          <span class="hud-label">Tiempo</span>
+          <span class="hud-val hud-timer" id="hudTimer">30</span>
+        </div>
+      </div>
+
+      <!-- Progress bar -->
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" id="progressBarFill" style="width:0%"></div>
+      </div>
+
+      <!-- Game arena -->
+      <div class="game-arena">
+
+        <!-- Phase indicator -->
+        <div class="phase-row">
+          <div class="phase-step" id="phase1" data-phase="1">
+            <span class="phase-num">1</span>
+            <span class="phase-secs">1 seg</span>
+          </div>
+          <div class="phase-sep">→</div>
+          <div class="phase-step" id="phase2" data-phase="2">
+            <span class="phase-num">2</span>
+            <span class="phase-secs">3 seg</span>
+          </div>
+          <div class="phase-sep">→</div>
+          <div class="phase-step" id="phase3" data-phase="3">
+            <span class="phase-num">3</span>
+            <span class="phase-secs">7 seg</span>
+          </div>
+          <div class="phase-sep">→</div>
+          <div class="phase-step" id="phase4" data-phase="4">
+            <span class="phase-num">4</span>
+            <span class="phase-secs">15 seg</span>
+          </div>
+        </div>
+
+        <!-- Player -->
+        <div class="player-card" id="playerCard">
+          <div class="waveform-wrap">
+            <div class="waveform" id="waveform">
+              <span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <audio id="audioPlayer" preload="none"></audio>
+          </div>
+
+          <button id="playBtn" class="play-btn" aria-label="Reproducir fragmento">
+            <span class="play-icon" id="playBtnIcon">▶</span>
+          </button>
+
+          <div class="phase-label">
+            Escucharás <strong id="phaseDuration">1 segundo</strong>
+          </div>
+        </div>
+
+        <!-- Guess input -->
+        <div class="guess-area">
+          <div class="guess-input-wrap">
+            <input
+              type="text"
+              id="guessInput"
+              class="guess-input"
+              placeholder="¿Qué canción es?"
+              autocomplete="off"
+            />
+            <div class="autocomplete-list hidden" id="autocompleteList"></div>
+          </div>
+
+          <div class="guess-actions">
+            <button id="skipBtn" class="btn btn-ghost skip-btn">
+              Pasar fase →
+            </button>
+            <button id="giveUpBtn" class="btn btn-ghost give-up-btn">
+              No sé
+            </button>
+            <button id="submitGuessBtn" class="btn btn-primary">
+              Confirmar
+            </button>
+          </div>
+        </div>
+
+        <!-- Feedback (shown after guess) -->
+        <div class="feedback-area hidden" id="feedbackArea">
+          <div class="feedback-card" id="feedbackCard">
+            <div class="feedback-result" id="feedbackResult">
+              <!-- ✓ / ✗ injected -->
+            </div>
+            <div class="feedback-song" id="feedbackSong">
+              <!-- Song info injected -->
+            </div>
+            <div class="feedback-points" id="feedbackPoints">
+              <!-- Points injected -->
+            </div>
+            <button id="nextSongBtn" class="btn btn-primary btn-large">
+              Siguiente canción →
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ══════════ SCREEN: Results ══════════ -->
+    <div id="screenResults" class="game-screen hidden">
+      <div class="results-wrap">
+
+        <div class="results-hero">
+          <div class="results-trophy" id="resultsTrophy">🏆</div>
+          <h2 class="results-title" id="resultsTitle">¡Partida terminada!</h2>
+          <div class="results-score-display">
+            <span class="results-score-num" id="resultsFinalScore">0</span>
+            <span class="results-score-label">puntos</span>
+          </div>
+        </div>
+
+        <div class="results-stats-row">
+          <div class="results-stat">
+            <span class="stat-num" id="statCorrect">0</span>
+            <span class="stat-label">Acertadas</span>
+          </div>
+          <div class="results-stat">
+            <span class="stat-num" id="statWrong">0</span>
+            <span class="stat-label">Falladas</span>
+          </div>
+          <div class="results-stat">
+            <span class="stat-num" id="statBestStreak">0</span>
+            <span class="stat-label">Racha máx.</span>
+          </div>
+          <div class="results-stat">
+            <span class="stat-num" id="statAvgPhase">-</span>
+            <span class="stat-label">Fase media</span>
+          </div>
+        </div>
+
+        <!-- Score history table -->
+        <div class="results-history">
+          <h3 class="history-title">Canciones de esta partida</h3>
+          <div class="history-list" id="historySongList">
+            <!-- Injected by JS -->
+          </div>
+        </div>
+
+        <!-- Past scores -->
+        <div class="results-leaderboard">
+          <h3 class="history-title">Mejores puntuaciones</h3>
+          <div class="leaderboard-list" id="leaderboardList">
+            <!-- Injected by JS -->
+          </div>
+        </div>
+
+        <div class="results-actions">
+          <button id="playAgainBtn" class="btn btn-primary btn-large">↺ Jugar de nuevo</button>
+          <a href="index.html" class="btn btn-ghost">Volver al inicio</a>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+
+  <!-- TOAST -->
+  <div id="toast" class="toast hidden" aria-live="polite"></div>
+
+  <script src="js/storage.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>

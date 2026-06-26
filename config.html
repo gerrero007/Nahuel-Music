@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SoundGuess – Ajustes</title>
+  <link rel="stylesheet" href="css/theme.css" />
+  <link rel="stylesheet" href="css/config.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="navbar">
+    <a href="index.html" class="nav-brand">
+      <span class="brand-icon">◈</span>
+      <span class="brand-name">SoundGuess</span>
+    </a>
+    <div class="nav-links">
+      <a href="index.html" class="nav-link">Inicio</a>
+      <a href="game.html" class="nav-link">Jugar</a>
+      <a href="config.html" class="nav-link active">Ajustes</a>
+    </div>
+  </nav>
+
+  <main class="config-main">
+    <div class="config-header">
+      <h1 class="config-title">Ajustes</h1>
+      <p class="config-sub">Personaliza tu experiencia en SoundGuess</p>
+    </div>
+
+    <div class="config-sections">
+
+      <!-- SECTION: Theme -->
+      <section class="config-section">
+        <div class="section-label">
+          <span class="section-icon">🎨</span>
+          <div>
+            <h2 class="section-title">Tema visual</h2>
+            <p class="section-desc">Elige el estilo de la interfaz</p>
+          </div>
+        </div>
+
+        <div class="theme-cards" id="themeCards" role="radiogroup" aria-label="Seleccionar tema">
+
+          <label class="theme-card" data-theme="dark">
+            <input type="radio" name="theme" value="dark" class="sr-only" />
+            <div class="theme-preview theme-preview-dark">
+              <div class="tp-bar"></div>
+              <div class="tp-block"></div>
+              <div class="tp-block tp-short"></div>
+            </div>
+            <div class="theme-card-info">
+              <span class="theme-name">Oscuro</span>
+              <span class="theme-badge">Por defecto</span>
+            </div>
+          </label>
+
+          <label class="theme-card" data-theme="light">
+            <input type="radio" name="theme" value="light" class="sr-only" />
+            <div class="theme-preview theme-preview-light">
+              <div class="tp-bar"></div>
+              <div class="tp-block"></div>
+              <div class="tp-block tp-short"></div>
+            </div>
+            <div class="theme-card-info">
+              <span class="theme-name">Claro</span>
+            </div>
+          </label>
+
+          <label class="theme-card" data-theme="neon">
+            <input type="radio" name="theme" value="neon" class="sr-only" />
+            <div class="theme-preview theme-preview-neon">
+              <div class="tp-bar"></div>
+              <div class="tp-block"></div>
+              <div class="tp-block tp-short"></div>
+            </div>
+            <div class="theme-card-info">
+              <span class="theme-name">Neón</span>
+              <span class="theme-badge neon">Cyberpunk</span>
+            </div>
+          </label>
+
+        </div>
+      </section>
+
+      <!-- DIVIDER -->
+      <div class="section-divider"></div>
+
+      <!-- SECTION: Game -->
+      <section class="config-section">
+        <div class="section-label">
+          <span class="section-icon">🎮</span>
+          <div>
+            <h2 class="section-title">Partida</h2>
+            <p class="section-desc">Configura cómo se juegan las partidas</p>
+          </div>
+        </div>
+
+        <div class="config-options">
+
+          <div class="config-row">
+            <div class="config-row-info">
+              <label class="config-row-title" for="songsPerGame">Canciones por partida</label>
+              <p class="config-row-desc">Cuántas canciones hay que adivinar en cada partida</p>
+            </div>
+            <div class="config-row-control">
+              <button class="stepper-btn" id="songsDecBtn" aria-label="Reducir">−</button>
+              <span class="stepper-val" id="songsPerGameVal">20</span>
+              <button class="stepper-btn" id="songsIncBtn" aria-label="Aumentar">+</button>
+              <input type="hidden" id="songsPerGame" value="20" min="5" max="50" />
+            </div>
+          </div>
+
+          <div class="config-row">
+            <div class="config-row-info">
+              <label class="config-row-title" for="skipEnabled">Permitir pasar</label>
+              <p class="config-row-desc">El jugador puede saltar una canción sin penalización</p>
+            </div>
+            <div class="config-row-control">
+              <button
+                class="toggle-btn"
+                id="skipEnabled"
+                role="switch"
+                aria-checked="true"
+                data-key="skipEnabled"
+              >
+                <span class="toggle-thumb"></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="config-row">
+            <div class="config-row-info">
+              <label class="config-row-title" for="showArtist">Mostrar artista al fallar</label>
+              <p class="config-row-desc">Revela el artista cuando se agoten los intentos</p>
+            </div>
+            <div class="config-row-control">
+              <button
+                class="toggle-btn"
+                id="showArtist"
+                role="switch"
+                aria-checked="true"
+                data-key="showArtist"
+              >
+                <span class="toggle-thumb"></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="config-row">
+            <div class="config-row-info">
+              <label class="config-row-title" for="timerEnabled">Temporizador de respuesta</label>
+              <p class="config-row-desc">Límite de tiempo para escribir la respuesta (en segundos)</p>
+            </div>
+            <div class="config-row-control">
+              <button
+                class="toggle-btn"
+                id="timerEnabled"
+                role="switch"
+                aria-checked="false"
+                data-key="timerEnabled"
+              >
+                <span class="toggle-thumb"></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="config-row" id="timerSecondsRow" style="opacity:0.4; pointer-events:none;">
+            <div class="config-row-info">
+              <label class="config-row-title" for="timerSeconds">Segundos por respuesta</label>
+              <p class="config-row-desc">Tiempo que tiene el jugador para escribir antes de que pase</p>
+            </div>
+            <div class="config-row-control">
+              <button class="stepper-btn" id="timerDecBtn" aria-label="Reducir">−</button>
+              <span class="stepper-val" id="timerSecondsVal">30</span>
+              <button class="stepper-btn" id="timerIncBtn" aria-label="Aumentar">+</button>
+              <input type="hidden" id="timerSeconds" value="30" min="10" max="120" />
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- DIVIDER -->
+      <div class="section-divider"></div>
+
+      <!-- SECTION: Audio -->
+      <section class="config-section">
+        <div class="section-label">
+          <span class="section-icon">🔊</span>
+          <div>
+            <h2 class="section-title">Audio</h2>
+            <p class="section-desc">Ajustes de reproducción</p>
+          </div>
+        </div>
+
+        <div class="config-options">
+          <div class="config-row">
+            <div class="config-row-info">
+              <label class="config-row-title" for="volumeSlider">Volumen de preescucha</label>
+              <p class="config-row-desc">Nivel de volumen durante el juego</p>
+            </div>
+            <div class="config-row-control wide-control">
+              <span class="volume-icon">🔈</span>
+              <input type="range" id="volumeSlider" class="slider" min="0" max="100" value="80" />
+              <span class="volume-label" id="volumeLabel">80%</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- DIVIDER -->
+      <div class="section-divider"></div>
+
+      <!-- SECTION: Data -->
+      <section class="config-section">
+        <div class="section-label">
+          <span class="section-icon">💾</span>
+          <div>
+            <h2 class="section-title">Datos</h2>
+            <p class="section-desc">Gestiona tus playlists y puntuaciones guardadas</p>
+          </div>
+        </div>
+
+        <div class="config-options">
+          <div class="config-row">
+            <div class="config-row-info">
+              <span class="config-row-title">Exportar datos</span>
+              <p class="config-row-desc">Descarga todas tus playlists y ajustes en un archivo JSON</p>
+            </div>
+            <div class="config-row-control">
+              <button id="exportDataBtn" class="btn btn-ghost">Exportar</button>
+            </div>
+          </div>
+
+          <div class="config-row">
+            <div class="config-row-info">
+              <span class="config-row-title">Importar datos</span>
+              <p class="config-row-desc">Recupera playlists desde un archivo JSON exportado</p>
+            </div>
+            <div class="config-row-control">
+              <label class="btn btn-ghost" for="importDataInput" style="cursor:pointer;">Importar</label>
+              <input type="file" id="importDataInput" accept=".json" class="sr-only" />
+            </div>
+          </div>
+
+          <div class="config-row">
+            <div class="config-row-info">
+              <span class="config-row-title">Borrar puntuaciones</span>
+              <p class="config-row-desc">Elimina el historial de partidas (las playlists se mantienen)</p>
+            </div>
+            <div class="config-row-control">
+              <button id="clearScoresBtn" class="btn btn-danger">Borrar</button>
+            </div>
+          </div>
+
+          <div class="config-row">
+            <div class="config-row-info">
+              <span class="config-row-title">Restablecer todo</span>
+              <p class="config-row-desc">Elimina playlists, puntuaciones y ajustes. No hay vuelta atrás.</p>
+            </div>
+            <div class="config-row-control">
+              <button id="resetAllBtn" class="btn btn-danger">Restablecer</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Save bar -->
+    <div class="save-bar" id="saveBar">
+      <span class="save-msg">Tienes cambios sin guardar</span>
+      <div class="save-actions">
+        <button id="discardBtn" class="btn btn-ghost">Descartar</button>
+        <button id="saveBtn" class="btn btn-primary">Guardar ajustes</button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- TOAST -->
+  <div id="toast" class="toast hidden" aria-live="polite"></div>
+
+  <!-- CONFIRM MODAL -->
+  <div id="modalConfirm" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="confirmTitle" class="modal-title">¿Estás seguro?</h3>
+      </div>
+      <div class="modal-body">
+        <p id="confirmMsg" class="modal-text"></p>
+      </div>
+      <div class="modal-footer">
+        <button id="confirmCancel" class="btn btn-ghost">Cancelar</button>
+        <button id="confirmOk" class="btn btn-danger">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/storage.js"></script>
+  <script src="js/config.js"></script>
+</body>
+</html>
