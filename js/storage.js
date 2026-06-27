@@ -1,18 +1,16 @@
 /* ═══════════════════════════════════════════════
    storage.js  –  Capa de persistencia (localStorage)
-   Debe cargarse primero en todas las páginas.
    ═══════════════════════════════════════════════ */
-
+ 
 const Storage = (() => {
-
+ 
   const KEYS = {
     PLAYLISTS : 'sg_playlists',
     SETTINGS  : 'sg_settings',
     SCORES    : 'sg_scores',
     ACTIVE_PL : 'sg_active_playlist',
   };
-
-  /* ── Defaults ── */
+ 
   const DEFAULT_SETTINGS = {
     theme        : 'dark',
     songsPerGame : 20,
@@ -22,68 +20,37 @@ const Storage = (() => {
     timerSeconds : 30,
     volume       : 80,
   };
-
-  /* ──────────────────────────────────────────
-     Helpers
-  ────────────────────────────────────────── */
+ 
   function _get(key) {
-    try {
-      const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : null;
-    } catch { return null; }
+    try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : null; }
+    catch { return null; }
   }
-
   function _set(key, value) {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-      return true;
-    } catch { return false; }
+    try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+    catch { return false; }
   }
-
-  /* ──────────────────────────────────────────
-     Settings
-  ────────────────────────────────────────── */
-  function getSettings() {
-    const saved = _get(KEYS.SETTINGS) || {};
-    return { ...DEFAULT_SETTINGS, ...saved };
-  }
-
+ 
+  /* ── Settings ── */
+  function getSettings() { return { ...DEFAULT_SETTINGS, ...(_get(KEYS.SETTINGS) || {}) }; }
   function saveSettings(partial) {
-    const current = getSettings();
-    const merged  = { ...current, ...partial };
+    const merged = { ...getSettings(), ...partial };
     _set(KEYS.SETTINGS, merged);
     return merged;
   }
-
-  /* ──────────────────────────────────────────
-     Playlists
-  ────────────────────────────────────────── */
-  function getPlaylists() {
-    return _get(KEYS.PLAYLISTS) || [];
-  }
-
-  function getPlaylist(id) {
-    return getPlaylists().find(p => p.id === id) || null;
-  }
-
-  function savePlaylists(list) {
-    return _set(KEYS.PLAYLISTS, list);
-  }
-
+ 
+  /* ── Playlists ── */
+  function getPlaylists()    { return _get(KEYS.PLAYLISTS) || []; }
+  function getPlaylist(id)   { return getPlaylists().find(p => p.id === id) || null; }
+  function savePlaylists(l)  { return _set(KEYS.PLAYLISTS, l); }
+ 
   function createPlaylist(name, emoji = '🎵') {
     const list = getPlaylists();
-    const pl = {
-      id      : 'pl_' + Date.now(),
-      name    : name.trim(),
-      emoji   : emoji || '🎵',
-      songs   : [],
-      created : Date.now(),
-    };
+    const pl   = { id: 'pl_' + Date.now(), name: name.trim(), emoji: emoji || '🎵', songs: [], created: Date.now() };
     list.push(pl);
     savePlaylists(list);
     return pl;
   }
-
+ 
   function updatePlaylist(id, changes) {
     const list = getPlaylists();
     const idx  = list.findIndex(p => p.id === id);
@@ -92,20 +59,14 @@ const Storage = (() => {
     savePlaylists(list);
     return list[idx];
   }
-
-  function deletePlaylist(id) {
-    const list = getPlaylists().filter(p => p.id !== id);
-    savePlaylists(list);
-  }
-
+ 
+  function deletePlaylist(id) { savePlaylists(getPlaylists().filter(p => p.id !== id)); }
+ 
   function addSongToPlaylist(playlistId, song) {
     const list = getPlaylists();
     const pl   = list.find(p => p.id === playlistId);
     if (!pl) return false;
-
-    // evitar duplicados
     if (pl.songs.some(s => s.id === song.id)) return 'duplicate';
-
     pl.songs.push({
       id      : song.id,
       title   : song.title,
@@ -116,7 +77,7 @@ const Storage = (() => {
     savePlaylists(list);
     return true;
   }
-
+ 
   function removeSongFromPlaylist(playlistId, songId) {
     const list = getPlaylists();
     const pl   = list.find(p => p.id === playlistId);
@@ -125,35 +86,23 @@ const Storage = (() => {
     savePlaylists(list);
     return true;
   }
-
-  /* ──────────────────────────────────────────
-     Active playlist (para pasar entre páginas)
-  ────────────────────────────────────────── */
+ 
+  /* ── Active playlist ── */
   function setActivePlaylist(id) { _set(KEYS.ACTIVE_PL, id); }
   function getActivePlaylist()   { return _get(KEYS.ACTIVE_PL); }
   function clearActivePlaylist() { localStorage.removeItem(KEYS.ACTIVE_PL); }
-
-  /* ──────────────────────────────────────────
-     Scores / Historial
-  ────────────────────────────────────────── */
-  function getScores() {
-    return _get(KEYS.SCORES) || [];
-  }
-
+ 
+  /* ── Scores ── */
+  function getScores() { return _get(KEYS.SCORES) || []; }
   function addScore(entry) {
-    // entry: { playlistId, playlistName, score, correct, wrong, bestStreak, avgPhase, date }
     const scores = getScores();
     scores.unshift({ ...entry, date: Date.now() });
-    // guardar solo los últimos 100
     _set(KEYS.SCORES, scores.slice(0, 100));
   }
-
-  function clearScores() {
-    _set(KEYS.SCORES, []);
-  }
-
+  function clearScores() { _set(KEYS.SCORES, []); }
+ 
   /* ──────────────────────────────────────────
-     Export / Import
+     Export / Import  (con soporte para formato Spotify csvjson)
   ────────────────────────────────────────── */
   function exportData() {
     return JSON.stringify({
@@ -164,41 +113,88 @@ const Storage = (() => {
       scores    : getScores(),
     }, null, 2);
   }
-
+ 
+  /**
+   * Detecta si el JSON es un array de tracks estilo Spotify csvjson
+   * (tiene campos "Track Name", "Artist Name(s)", "Track URI")
+   */
+  function _isSpotifyFormat(data) {
+    return Array.isArray(data) &&
+           data.length > 0 &&
+           'Track Name' in data[0] &&
+           'Artist Name(s)' in data[0];
+  }
+ 
+  /**
+   * Convierte un array Spotify csvjson en una playlist SoundGuess.
+   * Los tracks no tienen preview (se buscarán en Deezer al jugar),
+   * pero se guardan con id basado en el URI de Spotify para evitar duplicados.
+   */
+  function _convertSpotifyToPlaylist(tracks) {
+    const songs = tracks.map(t => {
+      // Extraer el ID de Spotify del URI  (spotify:track:XXXX)
+      const uri    = t['Track URI'] || '';
+      const spotId = uri.split(':')[2] || ('sp_' + Math.random().toString(36).slice(2));
+      return {
+        id      : spotId,
+        title   : t['Track Name']      || 'Sin título',
+        artist  : t['Artist Name(s)']  || 'Desconocido',
+        cover   : '',       // sin portada hasta buscar en Deezer
+        preview : '',       // sin preview hasta buscar en Deezer
+        album   : t['Album Name'] || '',
+        spotifyUri: uri,
+      };
+    });
+ 
+    return {
+      id      : 'pl_' + Date.now(),
+      name    : 'Importada de Spotify',
+      emoji   : '🎵',
+      songs,
+      created : Date.now(),
+      needsDeezerLookup: true,   // flag para que game.js busque previews
+    };
+  }
+ 
   function importData(jsonStr) {
     const data = JSON.parse(jsonStr);
-    if (!data.version) throw new Error('Formato inválido');
-    if (data.playlists) savePlaylists(data.playlists);
-    if (data.settings)  _set(KEYS.SETTINGS, data.settings);
-    if (data.scores)    _set(KEYS.SCORES, data.scores);
-    return data;
+ 
+    /* ── Formato Spotify csvjson ── */
+    if (_isSpotifyFormat(data)) {
+      const pl   = _convertSpotifyToPlaylist(data);
+      const list = getPlaylists();
+      list.push(pl);
+      savePlaylists(list);
+      return { type: 'spotify', playlist: pl, count: pl.songs.length };
+    }
+ 
+    /* ── Formato SoundGuess nativo ── */
+    if (data.version) {
+      if (data.playlists) savePlaylists(data.playlists);
+      if (data.settings)  _set(KEYS.SETTINGS, data.settings);
+      if (data.scores)    _set(KEYS.SCORES, data.scores);
+      return { type: 'native', ...data };
+    }
+ 
+    throw new Error('Formato de archivo no reconocido');
   }
-
-  /* ──────────────────────────────────────────
-     Reset
-  ────────────────────────────────────────── */
-  function resetAll() {
-    Object.values(KEYS).forEach(k => localStorage.removeItem(k));
-  }
-
-  /* ──────────────────────────────────────────
-     Apply theme on load (en todas las páginas)
-  ────────────────────────────────────────── */
+ 
+  /* ── Reset ── */
+  function resetAll() { Object.values(KEYS).forEach(k => localStorage.removeItem(k)); }
+ 
+  /* ── Apply theme ── */
   function applyTheme() {
-    const { theme } = getSettings();
-    document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.setAttribute('data-theme', getSettings().theme);
   }
-
-  // Ejecutar inmediatamente para evitar flash
   applyTheme();
-
+ 
   return {
     getSettings, saveSettings,
     getPlaylists, getPlaylist, createPlaylist, updatePlaylist,
     deletePlaylist, addSongToPlaylist, removeSongFromPlaylist,
     setActivePlaylist, getActivePlaylist, clearActivePlaylist,
     getScores, addScore, clearScores,
-    exportData, importData, resetAll,
-    applyTheme,
+    exportData, importData, resetAll, applyTheme,
   };
 })();
+ 

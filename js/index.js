@@ -1,56 +1,51 @@
 /* ═══════════════════════════════════════════════
    index.js  –  Lógica de la página de inicio
    ═══════════════════════════════════════════════ */
-
+ 
 /* ──────────────────────────────────────────
    Estado local
 ────────────────────────────────────────── */
-let searchResults   = [];
-let pendingSong     = null;   // canción esperando ser añadida a una playlist
-let previewAudio    = new Audio();
+let searchResults    = [];
+let pendingSong      = null;
+let previewAudio     = new Audio();
 let playingPreviewId = null;
-let activeViewPl    = null;   // playlist abierta en el modal de vista
-let searchDebounce  = null;
-
+let activeViewPl     = null;
+let searchDebounce   = null;
+ 
 /* ──────────────────────────────────────────
    DOM refs
 ────────────────────────────────────────── */
 const $ = id => document.getElementById(id);
-
-const searchInput      = $('searchInput');
-const searchBtn        = $('searchBtn');
-const searchResultsEl  = $('searchResults');
-const searchEmpty      = $('searchEmpty');
-const playlistsListEl  = $('playlistsList');
-const playlistsEmpty   = $('playlistsEmpty');
-const newPlaylistBtn   = $('newPlaylistBtn');
-
-// Modal: nueva playlist
-const modalNewPlaylist  = $('modalNewPlaylist');
-const playlistNameInput = $('playlistNameInput');
-const playlistEmojiInput= $('playlistEmojiInput');
-const closeModal        = $('closeModal');
-const cancelModal       = $('cancelModal');
-const confirmModal      = $('confirmModal');
-
-// Modal: añadir canción
-const modalAddSong      = $('modalAddSong');
-const modalSongInfo     = $('modalSongInfo');
-const playlistSelectList= $('playlistSelectList');
-const closeAddModal     = $('closeAddModal');
-
-// Modal: ver playlist
-const modalViewPlaylist = $('modalViewPlaylist');
-const modalViewTitle    = $('modalViewTitle');
-const playlistSongsList = $('playlistSongsList');
-const closeViewModal    = $('closeViewModal');
-const deletePlaylistBtn = $('deletePlaylistBtn');
-const playToGameBtn     = $('playToGameBtn');
-
+ 
+const searchInput       = $('searchInput');
+const searchBtn         = $('searchBtn');
+const searchResultsEl   = $('searchResults');
+const playlistsListEl   = $('playlistsList');
+const playlistsEmpty    = $('playlistsEmpty');
+const newPlaylistBtn    = $('newPlaylistBtn');
+ 
+const modalNewPlaylist   = $('modalNewPlaylist');
+const playlistNameInput  = $('playlistNameInput');
+const playlistEmojiInput = $('playlistEmojiInput');
+const closeModal         = $('closeModal');
+const cancelModal        = $('cancelModal');
+const confirmModal       = $('confirmModal');
+ 
+const modalAddSong       = $('modalAddSong');
+const modalSongInfo      = $('modalSongInfo');
+const playlistSelectList = $('playlistSelectList');
+const closeAddModal      = $('closeAddModal');
+ 
+const modalViewPlaylist  = $('modalViewPlaylist');
+const modalViewTitle     = $('modalViewTitle');
+const playlistSongsList  = $('playlistSongsList');
+const closeViewModal     = $('closeViewModal');
+const deletePlaylistBtn  = $('deletePlaylistBtn');
+ 
 const toast = $('toast');
-
+ 
 /* ──────────────────────────────────────────
-   Toast helper
+   Toast
 ────────────────────────────────────────── */
 let toastTimer;
 function showToast(msg, type = '') {
@@ -59,9 +54,54 @@ function showToast(msg, type = '') {
   toast.className = 'toast' + (type ? ` ${type}` : '');
   toastTimer = setTimeout(() => { toast.className = 'toast hidden'; }, 2800);
 }
-
+ 
 /* ──────────────────────────────────────────
-   Búsqueda
+   Util
+────────────────────────────────────────── */
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+ 
+/* ──────────────────────────────────────────
+   Preview de audio
+────────────────────────────────────────── */
+function stopAllPreviews() {
+  previewAudio.pause();
+  previewAudio.src = '';
+  playingPreviewId = null;
+  document.querySelectorAll('.song-preview-btn').forEach(b => {
+    b.textContent = '▶';
+    b.classList.remove('playing');
+  });
+}
+ 
+function togglePreview(track, btn) {
+  if (playingPreviewId === track.id) {
+    stopAllPreviews();
+    return;
+  }
+  stopAllPreviews();
+ 
+  const { volume } = Storage.getSettings();
+  previewAudio = new Audio(track.preview);
+  previewAudio.volume = (volume ?? 80) / 100;
+  previewAudio.play().catch(() => showToast('No se pudo reproducir el preview', 'error'));
+ 
+  playingPreviewId = track.id;
+  btn.textContent = '■';
+  btn.classList.add('playing');
+ 
+  previewAudio.addEventListener('ended', () => {
+    btn.textContent = '▶';
+    btn.classList.remove('playing');
+    playingPreviewId = null;
+  }, { once: true });
+}
+ 
+/* ──────────────────────────────────────────
+   Render resultados de búsqueda
 ────────────────────────────────────────── */
 function renderSkeletons(n = 5) {
   searchResultsEl.innerHTML = '';
@@ -76,10 +116,11 @@ function renderSkeletons(n = 5) {
       </div>`);
   }
 }
-
+ 
 function renderSearchResults(tracks) {
   searchResultsEl.innerHTML = '';
-
+  searchResults = tracks;
+ 
   if (!tracks.length) {
     searchResultsEl.innerHTML = `
       <div class="empty-state">
@@ -88,52 +129,60 @@ function renderSearchResults(tracks) {
       </div>`;
     return;
   }
-
-  searchResults = tracks;
-
+ 
   tracks.forEach((track, i) => {
     const card = document.createElement('div');
     card.className = 'song-card';
     card.style.animationDelay = `${i * 30}ms`;
+    card.dataset.trackId = track.id;
+    card.dataset.trackIdx = i;
     card.innerHTML = `
-      <img class="song-cover" src="${track.cover || 'data:image/svg+xml,<svg/>'}" alt="" loading="lazy" onerror="this.style.opacity=0" />
+      <img class="song-cover"
+           src="${track.cover || ''}"
+           alt=""
+           loading="lazy"
+           onerror="this.style.opacity=0" />
       <div class="song-info">
         <div class="song-title">${escHtml(track.title)}</div>
         <div class="song-artist">${escHtml(track.artist)}</div>
       </div>
-      ${track.preview ? `<button class="song-preview-btn" data-id="${track.id}" title="Preescuchar">▶</button>` : ''}
-      <button class="song-add-btn" data-idx="${i}">+ Añadir</button>
+      ${track.preview
+        ? `<button class="song-preview-btn" data-track-id="${track.id}" title="Preescuchar">▶</button>`
+        : ''}
+      <button class="song-add-btn" data-track-idx="${i}">+ Añadir</button>
     `;
     searchResultsEl.appendChild(card);
   });
-
-  // Delegación de eventos
-  searchResultsEl.addEventListener('click', onSearchResultsClick, { once: true });
-  // Para múltiples clics volver a añadir después del primero
-  searchResultsEl.addEventListener('click', onSearchResultsClick);
 }
-
-function onSearchResultsClick(e) {
+ 
+/* ── Delegación de eventos en el contenedor de resultados ── */
+searchResultsEl.addEventListener('click', e => {
   const previewBtn = e.target.closest('.song-preview-btn');
   const addBtn     = e.target.closest('.song-add-btn');
-
+ 
   if (previewBtn) {
-    const id = parseInt(previewBtn.dataset.id);
+    const id    = parseInt(previewBtn.dataset.trackId);
     const track = searchResults.find(t => t.id === id);
     if (track) togglePreview(track, previewBtn);
+    return;
   }
-
+ 
   if (addBtn) {
-    const idx = parseInt(addBtn.dataset.idx);
-    openAddSongModal(searchResults[idx]);
+    const idx   = parseInt(addBtn.dataset.trackIdx);
+    const track = searchResults[idx];
+    if (track) openAddSongModal(track);
+    return;
   }
-}
-
+});
+ 
+/* ──────────────────────────────────────────
+   Búsqueda
+────────────────────────────────────────── */
 async function doSearch(q) {
   if (!q.trim()) return;
+  stopAllPreviews();
   renderSkeletons();
-  searchEmpty.style.display = 'none';
-
+ 
   try {
     const tracks = await DeezerAPI.searchNormalized(q);
     renderSearchResults(tracks);
@@ -145,70 +194,31 @@ async function doSearch(q) {
       </div>`;
   }
 }
-
+ 
 searchBtn.addEventListener('click', () => doSearch(searchInput.value));
-
-searchInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter') doSearch(searchInput.value);
-});
-
+searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(searchInput.value); });
 searchInput.addEventListener('input', () => {
   clearTimeout(searchDebounce);
   if (searchInput.value.length > 2) {
     searchDebounce = setTimeout(() => doSearch(searchInput.value), 600);
   }
 });
-
+ 
 /* ──────────────────────────────────────────
-   Preview de audio
-────────────────────────────────────────── */
-function togglePreview(track, btn) {
-  if (playingPreviewId === track.id) {
-    previewAudio.pause();
-    playingPreviewId = null;
-    btn.textContent = '▶';
-    btn.classList.remove('playing');
-    return;
-  }
-
-  // Parar cualquier preview activo
-  previewAudio.pause();
-  document.querySelectorAll('.song-preview-btn.playing').forEach(b => {
-    b.textContent = '▶';
-    b.classList.remove('playing');
-  });
-
-  const { volume } = Storage.getSettings();
-  previewAudio = new Audio(track.preview);
-  previewAudio.volume = volume / 100;
-  previewAudio.play().catch(() => showToast('No se pudo reproducir el preview', 'error'));
-
-  playingPreviewId = track.id;
-  btn.textContent = '■';
-  btn.classList.add('playing');
-
-  previewAudio.addEventListener('ended', () => {
-    btn.textContent = '▶';
-    btn.classList.remove('playing');
-    playingPreviewId = null;
-  }, { once: true });
-}
-
-/* ──────────────────────────────────────────
-   Playlists
+   Render playlists
 ────────────────────────────────────────── */
 function renderPlaylists() {
   const lists = Storage.getPlaylists();
   playlistsListEl.innerHTML = '';
-
+ 
   if (!lists.length) {
     playlistsListEl.appendChild(playlistsEmpty);
     playlistsEmpty.style.display = '';
     return;
   }
-
+ 
   playlistsEmpty.style.display = 'none';
-
+ 
   lists.forEach(pl => {
     const row = document.createElement('div');
     row.className = 'playlist-row';
@@ -225,7 +235,7 @@ function renderPlaylists() {
     playlistsListEl.appendChild(row);
   });
 }
-
+ 
 /* ──────────────────────────────────────────
    Modal: nueva playlist
 ────────────────────────────────────────── */
@@ -235,14 +245,13 @@ newPlaylistBtn.addEventListener('click', () => {
   modalNewPlaylist.classList.remove('hidden');
   playlistNameInput.focus();
 });
-
-function closeNewPlaylistModal() {
-  modalNewPlaylist.classList.add('hidden');
-}
+ 
+function closeNewPlaylistModal() { modalNewPlaylist.classList.add('hidden'); }
 closeModal.addEventListener('click', closeNewPlaylistModal);
 cancelModal.addEventListener('click', closeNewPlaylistModal);
 modalNewPlaylist.addEventListener('click', e => { if (e.target === modalNewPlaylist) closeNewPlaylistModal(); });
-
+playlistNameInput.addEventListener('keydown', e => { if (e.key === 'Enter') confirmModal.click(); });
+ 
 confirmModal.addEventListener('click', () => {
   const name = playlistNameInput.value.trim();
   if (!name) { playlistNameInput.focus(); showToast('Escribe un nombre', 'error'); return; }
@@ -252,9 +261,7 @@ confirmModal.addEventListener('click', () => {
   renderPlaylists();
   showToast(`Playlist "${name}" creada`, 'success');
 });
-
-playlistNameInput.addEventListener('keydown', e => { if (e.key === 'Enter') confirmModal.click(); });
-
+ 
 /* ──────────────────────────────────────────
    Modal: añadir canción a playlist
 ────────────────────────────────────────── */
@@ -262,7 +269,7 @@ function openAddSongModal(song) {
   pendingSong = song;
   modalSongInfo.textContent = `"${song.title}" – ${song.artist}`;
   playlistSelectList.innerHTML = '';
-
+ 
   const lists = Storage.getPlaylists();
   if (!lists.length) {
     playlistSelectList.innerHTML = `<p style="color:var(--text-muted);font-size:.85rem;padding:.5rem 0">Crea una playlist primero.</p>`;
@@ -270,28 +277,28 @@ function openAddSongModal(song) {
     lists.forEach(pl => {
       const item = document.createElement('div');
       item.className = 'playlist-select-item';
-      item.innerHTML = `<span>${pl.emoji}</span> <span>${escHtml(pl.name)}</span> <span style="color:var(--text-muted);font-size:.75rem;margin-left:auto">${pl.songs.length} canciones</span>`;
+      item.innerHTML = `
+        <span>${pl.emoji}</span>
+        <span>${escHtml(pl.name)}</span>
+        <span style="color:var(--text-muted);font-size:.75rem;margin-left:auto">${pl.songs.length} canciones</span>
+      `;
       item.addEventListener('click', () => {
         const result = Storage.addSongToPlaylist(pl.id, song);
-        closeAddModal_fn();
-        if (result === 'duplicate') {
-          showToast('Ya está en esa playlist', 'error');
-        } else if (result) {
-          renderPlaylists();
-          showToast(`Añadida a "${pl.name}"`, 'success');
-        }
+        closeAddSongModal();
+        if (result === 'duplicate') showToast('Ya está en esa playlist', 'error');
+        else if (result)           { renderPlaylists(); showToast(`Añadida a "${pl.name}"`, 'success'); }
       });
       playlistSelectList.appendChild(item);
     });
   }
-
+ 
   modalAddSong.classList.remove('hidden');
 }
-
-function closeAddModal_fn() { modalAddSong.classList.add('hidden'); pendingSong = null; }
-closeAddModal.addEventListener('click', closeAddModal_fn);
-modalAddSong.addEventListener('click', e => { if (e.target === modalAddSong) closeAddModal_fn(); });
-
+ 
+function closeAddSongModal() { modalAddSong.classList.add('hidden'); pendingSong = null; }
+closeAddModal.addEventListener('click', closeAddSongModal);
+modalAddSong.addEventListener('click', e => { if (e.target === modalAddSong) closeAddSongModal(); });
+ 
 /* ──────────────────────────────────────────
    Modal: ver / editar playlist
 ────────────────────────────────────────── */
@@ -300,14 +307,14 @@ function openViewPlaylistModal(plId) {
   if (!pl) return;
   activeViewPl = plId;
   modalViewTitle.textContent = `${pl.emoji} ${pl.name}`;
-  renderPlaylistSongs(pl);
   Storage.setActivePlaylist(plId);
+  renderPlaylistSongs(pl);
   modalViewPlaylist.classList.remove('hidden');
 }
-
+ 
 function renderPlaylistSongs(pl) {
   playlistSongsList.innerHTML = '';
-
+ 
   if (!pl.songs.length) {
     playlistSongsList.innerHTML = `
       <div class="empty-state" style="padding:2rem 1rem">
@@ -316,7 +323,7 @@ function renderPlaylistSongs(pl) {
       </div>`;
     return;
   }
-
+ 
   pl.songs.forEach((song, i) => {
     const item = document.createElement('div');
     item.className = 'playlist-song-item';
@@ -331,53 +338,36 @@ function renderPlaylistSongs(pl) {
     `;
     playlistSongsList.appendChild(item);
   });
-
-  playlistSongsList.addEventListener('click', e => {
-    const btn = e.target.closest('.playlist-song-remove');
-    if (!btn) return;
-    const songId = parseInt(btn.dataset.songId);
-    Storage.removeSongFromPlaylist(activeViewPl, songId);
-    const updated = Storage.getPlaylist(activeViewPl);
-    renderPlaylistSongs(updated);
-    renderPlaylists();
-    showToast('Canción eliminada', 'success');
-  }, { once: true });
-  playlistSongsList.addEventListener('click', e => {
-    const btn = e.target.closest('.playlist-song-remove');
-    if (!btn) return;
-    const songId = parseInt(btn.dataset.songId);
-    Storage.removeSongFromPlaylist(activeViewPl, songId);
-    const updated = Storage.getPlaylist(activeViewPl);
-    renderPlaylistSongs(updated);
-    renderPlaylists();
-    showToast('Canción eliminada', 'success');
-  });
 }
-
+ 
+/* Delegación de eventos para eliminar canciones del modal */
+playlistSongsList.addEventListener('click', e => {
+  const btn = e.target.closest('.playlist-song-remove');
+  if (!btn || !activeViewPl) return;
+  const songId = parseInt(btn.dataset.songId);
+  Storage.removeSongFromPlaylist(activeViewPl, songId);
+  const updated = Storage.getPlaylist(activeViewPl);
+  renderPlaylistSongs(updated);
+  renderPlaylists();
+  showToast('Canción eliminada', 'success');
+});
+ 
 function closeViewModal_fn() { modalViewPlaylist.classList.add('hidden'); activeViewPl = null; }
 closeViewModal.addEventListener('click', closeViewModal_fn);
 modalViewPlaylist.addEventListener('click', e => { if (e.target === modalViewPlaylist) closeViewModal_fn(); });
-
+ 
 deletePlaylistBtn.addEventListener('click', () => {
   const pl = Storage.getPlaylist(activeViewPl);
   if (!pl) return;
-  if (!confirm(`¿Eliminar la playlist "${pl.name}"? Esta acción no se puede deshacer.`)) return;
+  if (!confirm(`¿Eliminar la playlist "${pl.name}"?`)) return;
   Storage.deletePlaylist(activeViewPl);
   closeViewModal_fn();
   renderPlaylists();
   showToast('Playlist eliminada', 'success');
 });
-
-/* ──────────────────────────────────────────
-   Util
-────────────────────────────────────────── */
-function escHtml(str) {
-  return String(str)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
+ 
 /* ──────────────────────────────────────────
    Init
 ────────────────────────────────────────── */
 renderPlaylists();
+ 

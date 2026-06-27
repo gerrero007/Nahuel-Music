@@ -1,68 +1,81 @@
 /* ═══════════════════════════════════════════════
    api.js  –  Capa de acceso a la API de Deezer
-   Usa el proxy público de AllOrigins para evitar
-   problemas de CORS con la API de Deezer.
+   Prueba múltiples proxies CORS en cascada.
    ═══════════════════════════════════════════════ */
-
+ 
 const DeezerAPI = (() => {
-
-  const PROXY    = 'https://api.allorigins.win/get?url=';
-  const BASE     = 'https://api.deezer.com';
-  const CACHE    = new Map();   // caché en memoria por sesión
-  const MAX_WAIT = 8000;        // timeout 8 s
-
+ 
+  const BASE    = 'https://api.deezer.com';
+  const CACHE   = new Map();
+  const TIMEOUT = 8000;
+ 
   /* ──────────────────────────────────────────
-     Fetch con proxy + caché + timeout
+     Lista de proxies CORS (se prueban en orden)
+  ────────────────────────────────────────── */
+  const PROXIES = [
+    url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+    url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+    url => `https://cors-anywhere.herokuapp.com/${url}`,
+  ];
+ 
+  /* Parsear la respuesta según el proxy usado */
+  async function parseProxy(res, proxyIndex) {
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (proxyIndex === 1) {
+      // allorigins devuelve { contents: "..." }
+      const outer = await res.json();
+      return JSON.parse(outer.contents);
+    }
+    // corsproxy.io y cors-anywhere devuelven el JSON directamente
+    return res.json();
+  }
+ 
+  /* ──────────────────────────────────────────
+     Fetch con cascada de proxies + caché
   ────────────────────────────────────────── */
   async function _fetch(endpoint) {
     const url = `${BASE}${endpoint}`;
-
     if (CACHE.has(url)) return CACHE.get(url);
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), MAX_WAIT);
-
-    try {
-      const proxyUrl = PROXY + encodeURIComponent(url);
-      const res  = await fetch(proxyUrl, { signal: controller.signal });
-      clearTimeout(timer);
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const outer = await res.json();
-      const data  = JSON.parse(outer.contents);
-
-      if (data.error) throw new Error(data.error.message || 'API error');
-
-      CACHE.set(url, data);
-      return data;
-
-    } catch (err) {
-      clearTimeout(timer);
-      throw err;
+ 
+    let lastErr;
+ 
+    for (let i = 0; i < PROXIES.length; i++) {
+      const proxyUrl   = PROXIES[i](url);
+      const controller = new AbortController();
+      const timer      = setTimeout(() => controller.abort(), TIMEOUT);
+ 
+      try {
+        const res  = await fetch(proxyUrl, { signal: controller.signal });
+        clearTimeout(timer);
+        const data = await parseProxy(res, i);
+ 
+        if (data.error) throw new Error(data.error.message || 'API error');
+ 
+        CACHE.set(url, data);
+        return data;
+ 
+      } catch (err) {
+        clearTimeout(timer);
+        lastErr = err;
+        // Probar el siguiente proxy
+      }
     }
+ 
+    throw lastErr || new Error('Todos los proxies fallaron');
   }
-
+ 
   /* ──────────────────────────────────────────
      Buscar canciones
-     Devuelve array de tracks normalizados
   ────────────────────────────────────────── */
   async function search(query, limit = 25) {
     if (!query || !query.trim()) return [];
     const q    = encodeURIComponent(query.trim());
     const data = await _fetch(`/search?q=${q}&limit=${limit}&output=json`);
-    return (data.data || []).filter(t => t.preview); // solo tracks con preview
+    return (data.data || []).filter(t => t.preview);
   }
-
+ 
   /* ──────────────────────────────────────────
-     Obtener un track por ID
-  ────────────────────────────────────────── */
-  async function getTrack(id) {
-    return await _fetch(`/track/${id}`);
-  }
-
-  /* ──────────────────────────────────────────
-     Normalizar track de Deezer a objeto interno
+     Normalizar track
   ────────────────────────────────────────── */
   function normalizeTrack(t) {
     return {
@@ -75,14 +88,12 @@ const DeezerAPI = (() => {
       duration: t.duration || 0,
     };
   }
-
-  /* ──────────────────────────────────────────
-     Búsqueda y normalización conjunta
-  ────────────────────────────────────────── */
+ 
   async function searchNormalized(query, limit = 25) {
     const raw = await search(query, limit);
     return raw.map(normalizeTrack);
   }
-
-  return { search, searchNormalized, getTrack, normalizeTrack };
+ 
+  return { search, searchNormalized, normalizeTrack };
 })();
+ 

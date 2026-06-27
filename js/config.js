@@ -1,18 +1,18 @@
 /* ═══════════════════════════════════════════════
    config.js  –  Lógica de la página de ajustes
    ═══════════════════════════════════════════════ */
-
+ 
 /* ──────────────────────────────────────────
    Estado local (refleja cambios pendientes)
 ────────────────────────────────────────── */
 let pendingSettings = { ...Storage.getSettings() };
 let dirty = false;
-
+ 
 /* ──────────────────────────────────────────
    DOM refs
 ────────────────────────────────────────── */
 const $ = id => document.getElementById(id);
-
+ 
 const themeCards      = document.querySelectorAll('.theme-card');
 const songsPerGameVal = $('songsPerGameVal');
 const songsPerGameIn  = $('songsPerGame');
@@ -33,14 +33,14 @@ const importDataInput = $('importDataInput');
 const clearScoresBtn  = $('clearScoresBtn');
 const resetAllBtn     = $('resetAllBtn');
 const toast           = $('toast');
-
+ 
 // Confirm modal
 const modalConfirm  = $('modalConfirm');
 const confirmTitle  = $('confirmTitle');
 const confirmMsg    = $('confirmMsg');
 const confirmCancel = $('confirmCancel');
 const confirmOk     = $('confirmOk');
-
+ 
 /* ──────────────────────────────────────────
    Toast
 ────────────────────────────────────────── */
@@ -51,7 +51,7 @@ function showToast(msg, type = '') {
   toast.className = 'toast' + (type ? ` ${type}` : '');
   toastTimer = setTimeout(() => { toast.className = 'toast hidden'; }, 2800);
 }
-
+ 
 /* ──────────────────────────────────────────
    Marcar cambios sin guardar
 ────────────────────────────────────────── */
@@ -59,18 +59,18 @@ function markDirty() {
   dirty = true;
   saveBar.classList.add('visible');
 }
-
+ 
 function markClean() {
   dirty = false;
   saveBar.classList.remove('visible');
 }
-
+ 
 /* ──────────────────────────────────────────
    Render: carga los valores guardados en la UI
 ────────────────────────────────────────── */
 function renderSettings() {
   const s = pendingSettings;
-
+ 
   // Tema
   themeCards.forEach(card => {
     const val = card.dataset.theme;
@@ -79,34 +79,34 @@ function renderSettings() {
     inp.checked = active;
     card.classList.toggle('selected', active);
   });
-
+ 
   // Canciones por partida
   songsPerGameVal.textContent = s.songsPerGame;
   songsPerGameIn.value        = s.songsPerGame;
-
+ 
   // Toggles
   ['skipEnabled', 'showArtist', 'timerEnabled'].forEach(key => {
     const btn = $( key );
     if (btn) btn.setAttribute('aria-checked', s[key] ? 'true' : 'false');
   });
-
+ 
   // Fila timer
   syncTimerRow(s.timerEnabled);
-
+ 
   // Timer segundos
   timerSecondsVal.textContent = s.timerSeconds;
   timerSecondsIn.value        = s.timerSeconds;
-
+ 
   // Volumen
   volumeSlider.value    = s.volume;
   volumeLabel.textContent = s.volume + '%';
 }
-
+ 
 function syncTimerRow(enabled) {
   timerSecondsRow.style.opacity      = enabled ? '1' : '0.4';
   timerSecondsRow.style.pointerEvents= enabled ? 'auto' : 'none';
 }
-
+ 
 /* ──────────────────────────────────────────
    Eventos: tema
 ────────────────────────────────────────── */
@@ -120,7 +120,7 @@ themeCards.forEach(card => {
     markDirty();
   });
 });
-
+ 
 /* ──────────────────────────────────────────
    Eventos: steppers
 ────────────────────────────────────────── */
@@ -142,10 +142,10 @@ function makeStepper(decBtn, incBtn, input, displayEl, key, min, max) {
     markDirty();
   });
 }
-
+ 
 makeStepper(songsDecBtn, songsIncBtn, songsPerGameIn, songsPerGameVal, 'songsPerGame', 5, 50);
 makeStepper(timerDecBtn, timerIncBtn, timerSecondsIn, timerSecondsVal, 'timerSeconds', 10, 120);
-
+ 
 /* ──────────────────────────────────────────
    Eventos: toggles
 ────────────────────────────────────────── */
@@ -161,7 +161,7 @@ makeStepper(timerDecBtn, timerIncBtn, timerSecondsIn, timerSecondsVal, 'timerSec
     markDirty();
   });
 });
-
+ 
 /* ──────────────────────────────────────────
    Eventos: volumen
 ────────────────────────────────────────── */
@@ -171,7 +171,7 @@ volumeSlider.addEventListener('input', () => {
   pendingSettings.volume = val;
   markDirty();
 });
-
+ 
 /* ──────────────────────────────────────────
    Guardar / Descartar
 ────────────────────────────────────────── */
@@ -181,7 +181,7 @@ saveBtn.addEventListener('click', () => {
   markClean();
   showToast('Ajustes guardados', 'success');
 });
-
+ 
 discardBtn.addEventListener('click', () => {
   pendingSettings = { ...Storage.getSettings() };
   renderSettings();
@@ -189,7 +189,7 @@ discardBtn.addEventListener('click', () => {
   markClean();
   showToast('Cambios descartados');
 });
-
+ 
 /* ──────────────────────────────────────────
    Exportar / Importar
 ────────────────────────────────────────── */
@@ -204,46 +204,54 @@ exportDataBtn.addEventListener('click', () => {
   URL.revokeObjectURL(url);
   showToast('Datos exportados', 'success');
 });
-
+ 
 importDataInput.addEventListener('change', () => {
   const file = importDataInput.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
     try {
-      Storage.importData(e.target.result);
-      pendingSettings = { ...Storage.getSettings() };
-      renderSettings();
-      document.documentElement.setAttribute('data-theme', pendingSettings.theme);
-      markClean();
-      showToast('Datos importados correctamente', 'success');
-    } catch {
-      showToast('El archivo no es válido', 'error');
+      const result = Storage.importData(e.target.result);
+ 
+      if (result.type === 'spotify') {
+        showToast(
+          `Playlist de Spotify importada: ${result.count} canciones. Los previews se buscarán al jugar.`,
+          'success'
+        );
+      } else {
+        pendingSettings = { ...Storage.getSettings() };
+        renderSettings();
+        document.documentElement.setAttribute('data-theme', pendingSettings.theme);
+        markClean();
+        showToast('Datos importados correctamente', 'success');
+      }
+    } catch (err) {
+      showToast('El archivo no es válido o tiene un formato no reconocido', 'error');
     }
   };
   reader.readAsText(file);
   importDataInput.value = '';
 });
-
+ 
 /* ──────────────────────────────────────────
    Confirm modal helpers
 ────────────────────────────────────────── */
 let confirmCallback = null;
-
+ 
 function openConfirm(title, msg, cb) {
   confirmTitle.textContent = title;
   confirmMsg.textContent   = msg;
   confirmCallback = cb;
   modalConfirm.classList.remove('hidden');
 }
-
+ 
 confirmCancel.addEventListener('click', () => { modalConfirm.classList.add('hidden'); confirmCallback = null; });
 confirmOk.addEventListener('click', () => {
   modalConfirm.classList.add('hidden');
   if (confirmCallback) { confirmCallback(); confirmCallback = null; }
 });
 modalConfirm.addEventListener('click', e => { if (e.target === modalConfirm) confirmCancel.click(); });
-
+ 
 /* ──────────────────────────────────────────
    Borrar puntuaciones / Restablecer todo
 ────────────────────────────────────────── */
@@ -254,7 +262,7 @@ clearScoresBtn.addEventListener('click', () => {
     () => { Storage.clearScores(); showToast('Historial borrado', 'success'); }
   );
 });
-
+ 
 resetAllBtn.addEventListener('click', () => {
   openConfirm(
     '⚠️ Restablecer todo',
@@ -269,8 +277,9 @@ resetAllBtn.addEventListener('click', () => {
     }
   );
 });
-
+ 
 /* ──────────────────────────────────────────
    Init
 ────────────────────────────────────────── */
 renderSettings();
+ 
