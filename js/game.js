@@ -295,8 +295,34 @@ function loadSong() {
  
   // Precargar audio
   const song = state.queue[state.currentIdx];
-  audioPlayer.src = song.preview;
+  setAudioSrc(song.preview);
+}
+ 
+/* ──────────────────────────────────────────
+   Asignar src al audio con fallback a proxy
+────────────────────────────────────────── */
+const AUDIO_PROXIES = [
+  url => url,                                                          // directo (primero)
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,          // corsproxy.io
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, // allorigins raw
+];
+let currentAudioProxyIdx = 0;
+let currentPreviewUrl    = '';
+ 
+function setAudioSrc(url) {
+  currentPreviewUrl    = url;
+  currentAudioProxyIdx = 0;
+  audioPlayer.src = url;
   audioPlayer.load();
+}
+ 
+function tryNextAudioProxy() {
+  currentAudioProxyIdx++;
+  if (currentAudioProxyIdx >= AUDIO_PROXIES.length) return false;
+  const proxied = AUDIO_PROXIES[currentAudioProxyIdx](currentPreviewUrl);
+  audioPlayer.src = proxied;
+  audioPlayer.load();
+  return true;
 }
  
 /* ──────────────────────────────────────────
@@ -304,10 +330,7 @@ function loadSong() {
 ────────────────────────────────────────── */
 playBtn.addEventListener('click', () => {
   if (state.answered) return;
-  if (state.isPlaying) {
-    stopAudio();
-    return;
-  }
+  if (state.isPlaying) { stopAudio(); return; }
   playCurrentPhase();
 });
  
@@ -318,32 +341,51 @@ function playCurrentPhase() {
   playBtn.classList.add('loading');
   playBtnIcon.textContent = '…';
  
-  audioPlayer.volume = volume / 100;
+  audioPlayer.volume = (volume ?? 80) / 100;
   audioPlayer.currentTime = 0;
  
   audioPlayer.play().then(() => {
-    state.isPlaying = true;
-    playBtn.classList.remove('loading');
-    playBtnIcon.textContent = '■';
-    playerCard.classList.add('playing');
-    waveform.classList.add('playing');
-    animateWave();
- 
-    // Cortar al cabo de `dur` segundos
-    clearTimeout(state.phaseTimer);
-    state.phaseTimer = setTimeout(() => {
-      stopAudio();
-      // Si hay temporizador de respuesta, arrancarlo ahora
-      if (state.settings.timerEnabled && !state.answered) {
-        startCountdown(state.settings.timerSeconds);
-      }
-    }, dur * 1000);
- 
+    onAudioStarted(dur);
   }).catch(() => {
-    playBtn.classList.remove('loading');
-    playBtnIcon.textContent = '▶';
-    showToast('No se pudo reproducir el audio', 'error');
+    // Intentar con el siguiente proxy
+    if (tryNextAudioProxy()) {
+      audioPlayer.addEventListener('canplay', function onCanPlay() {
+        audioPlayer.removeEventListener('canplay', onCanPlay);
+        audioPlayer.volume = (volume ?? 80) / 100;
+        audioPlayer.currentTime = 0;
+        audioPlayer.play().then(() => onAudioStarted(dur)).catch(onAudioFailed);
+      }, { once: true });
+      audioPlayer.addEventListener('error', function onErr() {
+        audioPlayer.removeEventListener('error', onErr);
+        if (!tryNextAudioProxy()) onAudioFailed();
+      }, { once: true });
+    } else {
+      onAudioFailed();
+    }
   });
+}
+ 
+function onAudioStarted(dur) {
+  state.isPlaying = true;
+  playBtn.classList.remove('loading');
+  playBtnIcon.textContent = '■';
+  playerCard.classList.add('playing');
+  waveform.classList.add('playing');
+  animateWave();
+ 
+  clearTimeout(state.phaseTimer);
+  state.phaseTimer = setTimeout(() => {
+    stopAudio();
+    if (state.settings.timerEnabled && !state.answered) {
+      startCountdown(state.settings.timerSeconds);
+    }
+  }, dur * 1000);
+}
+ 
+function onAudioFailed() {
+  playBtn.classList.remove('loading');
+  playBtnIcon.textContent = '▶';
+  showToast('Audio no disponible para esta canción — pulsa "No sé" para continuar', 'error');
 }
  
 function stopAudio() {
@@ -734,4 +776,3 @@ function escHtml(str) {
 ────────────────────────────────────────── */
 showScreen('lobby');
 initLobby();
- 
