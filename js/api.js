@@ -94,6 +94,45 @@ const DeezerAPI = (() => {
     return raw.map(normalizeTrack);
   }
  
-  return { search, searchNormalized, normalizeTrack };
-})();
+  /* ──────────────────────────────────────────
+     Obtener preview como Blob (evita CORS en audio)
+     allorigins (índice 1) se salta porque no sirve
+     para contenido binario.
+  ────────────────────────────────────────── */
+  const PREVIEW_CACHE = new Map();
  
+  async function fetchPreviewBlob(previewUrl) {
+    if (PREVIEW_CACHE.has(previewUrl)) return PREVIEW_CACHE.get(previewUrl);
+ 
+    let lastErr;
+ 
+    for (let i = 0; i < PROXIES.length; i++) {
+      // allorigins solo sirve para JSON, no para binarios → saltar
+      if (i === 1) continue;
+ 
+      const proxyUrl   = PROXIES[i](previewUrl);
+      const controller = new AbortController();
+      const timer      = setTimeout(() => controller.abort(), TIMEOUT);
+ 
+      try {
+        const res = await fetch(proxyUrl, { signal: controller.signal });
+        clearTimeout(timer);
+ 
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+ 
+        const blob    = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        PREVIEW_CACHE.set(previewUrl, blobUrl);
+        return blobUrl;
+ 
+      } catch (err) {
+        clearTimeout(timer);
+        lastErr = err;
+      }
+    }
+ 
+    throw lastErr || new Error('No se pudo obtener el audio');
+  }
+ 
+  return { search, searchNormalized, normalizeTrack, fetchPreviewBlob };
+})();

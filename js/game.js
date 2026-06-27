@@ -1,12 +1,12 @@
 /* ═══════════════════════════════════════════════
    game.js  –  Motor del juego SoundGuess
    ═══════════════════════════════════════════════ */
- 
+
 /* ──────────────────────────────────────────
    Constantes
 ────────────────────────────────────────── */
 const PHASE_DURATIONS = [1, 3, 7, 15];   // segundos por fase (índice 0-3)
- 
+
 const POINTS = {
   phase1  : 1000,
   phase2  : 750,
@@ -15,7 +15,7 @@ const POINTS = {
   streak2 : 100,   // bonus por racha ≥2
   streak4 : 200,   // bonus por racha ≥4
 };
- 
+
 /* ──────────────────────────────────────────
    Estado del juego
 ────────────────────────────────────────── */
@@ -40,12 +40,12 @@ let state = {
   answered     : false,
   settings     : {},
 };
- 
+
 /* ──────────────────────────────────────────
    DOM refs
 ────────────────────────────────────────── */
 const $ = id => document.getElementById(id);
- 
+
 const screenLobby   = $('screenLobby');
 const screenGame    = $('screenGame');
 const screenResults = $('screenResults');
@@ -54,7 +54,7 @@ const lobbyEmpty    = $('lobbyEmpty');
 const lobbyActions  = $('lobbyActions');
 const selectedPlaylistInfo = $('selectedPlaylistInfo');
 const startGameBtn  = $('startGameBtn');
- 
+
 // HUD
 const hudSong    = $('hudSong');
 const hudScore   = $('hudScore');
@@ -62,25 +62,25 @@ const hudStreak  = $('hudStreak');
 const hudTimerBlock = $('hudTimerBlock');
 const hudTimer   = $('hudTimer');
 const progressBarFill = $('progressBarFill');
- 
+
 // Phases
 const phaseSteps  = [null, $('phase1'), $('phase2'), $('phase3'), $('phase4')];
 const phaseDurationLabel = $('phaseDuration');
- 
+
 // Player
 const playerCard   = $('playerCard');
 const waveform     = $('waveform');
 const audioPlayer  = $('audioPlayer');
 const playBtn      = $('playBtn');
 const playBtnIcon  = $('playBtnIcon');
- 
+
 // Guess
 const guessInput       = $('guessInput');
 const autocompleteList = $('autocompleteList');
 const skipBtn          = $('skipBtn');
 const giveUpBtn        = $('giveUpBtn');
 const submitGuessBtn   = $('submitGuessBtn');
- 
+
 // Feedback
 const feedbackArea   = $('feedbackArea');
 const feedbackCard   = $('feedbackCard');
@@ -88,7 +88,7 @@ const feedbackResult = $('feedbackResult');
 const feedbackSong   = $('feedbackSong');
 const feedbackPoints = $('feedbackPoints');
 const nextSongBtn    = $('nextSongBtn');
- 
+
 // Results
 const resultsTrophy    = $('resultsTrophy');
 const resultsTitle     = $('resultsTitle');
@@ -100,9 +100,9 @@ const statAvgPhase     = $('statAvgPhase');
 const historySongList  = $('historySongList');
 const leaderboardList  = $('leaderboardList');
 const playAgainBtn     = $('playAgainBtn');
- 
+
 const toast = $('toast');
- 
+
 /* ──────────────────────────────────────────
    Toast
 ────────────────────────────────────────── */
@@ -113,7 +113,7 @@ function showToast(msg, type = '') {
   toast.className = 'toast' + (type ? ` ${type}` : '');
   toastTimer = setTimeout(() => { toast.className = 'toast hidden'; }, 2600);
 }
- 
+
 /* ──────────────────────────────────────────
    Pantallas
 ────────────────────────────────────────── */
@@ -123,28 +123,28 @@ function showScreen(name) {
   screenResults.classList.toggle('hidden', name !== 'results');
   state.screen = name;
 }
- 
+
 /* ──────────────────────────────────────────
    LOBBY
 ────────────────────────────────────────── */
 function initLobby() {
   const playlists = Storage.getPlaylists();
   lobbyPlaylists.innerHTML = '';
- 
+
   const validPlaylists = playlists.filter(p => p.songs.length >= 3);
- 
+
   if (!validPlaylists.length) {
     lobbyPlaylists.appendChild(lobbyEmpty);
     lobbyEmpty.style.display = '';
     lobbyActions.style.display = 'none';
     return;
   }
- 
+
   lobbyEmpty.style.display = 'none';
- 
+
   // Pre-seleccionar la activa si existe
   const activePl = Storage.getActivePlaylist();
- 
+
   validPlaylists.forEach(pl => {
     const card = document.createElement('div');
     card.className = 'lobby-playlist-card';
@@ -156,13 +156,13 @@ function initLobby() {
     `;
     card.addEventListener('click', () => selectPlaylist(pl, card));
     lobbyPlaylists.appendChild(card);
- 
+
     if (pl.id === activePl) {
       setTimeout(() => selectPlaylist(pl, card), 0);
     }
   });
 }
- 
+
 function selectPlaylist(pl, cardEl) {
   document.querySelectorAll('.lobby-playlist-card').forEach(c => c.classList.remove('selected'));
   cardEl.classList.add('selected');
@@ -170,15 +170,15 @@ function selectPlaylist(pl, cardEl) {
   selectedPlaylistInfo.innerHTML = `${pl.emoji} <strong>${escHtml(pl.name)}</strong> &mdash; ${pl.songs.length} canciones`;
   lobbyActions.style.display = '';
 }
- 
+
 startGameBtn.addEventListener('click', async () => {
   if (!state.playlist) { showToast('Selecciona una playlist', 'error'); return; }
- 
+
   // Si la playlist viene de Spotify, buscar previews en Deezer primero
   if (state.playlist.needsDeezerLookup) {
     await enrichWithDeezerPreviews(state.playlist);
   }
- 
+
   const songs = state.playlist.songs.filter(s => s.preview);
   if (songs.length < 3) {
     showToast('No se encontraron suficientes canciones con preview en Deezer (mínimo 3)', 'error');
@@ -186,7 +186,7 @@ startGameBtn.addEventListener('click', async () => {
   }
   startGame(songs);
 });
- 
+
 /**
  * Para playlists importadas de Spotify (sin preview URL),
  * busca cada canción en Deezer y rellena cover + preview.
@@ -194,9 +194,9 @@ startGameBtn.addEventListener('click', async () => {
 async function enrichWithDeezerPreviews(pl) {
   startGameBtn.disabled    = true;
   startGameBtn.textContent = '🔍 Buscando previews…';
- 
+
   let updated = false;
- 
+
   for (const song of pl.songs) {
     if (song.preview) continue;
     try {
@@ -209,22 +209,22 @@ async function enrichWithDeezerPreviews(pl) {
       }
     } catch { /* seguir con la siguiente */ }
   }
- 
+
   if (updated) {
     pl.needsDeezerLookup = pl.songs.some(s => !s.preview);
     Storage.updatePlaylist(pl.id, { songs: pl.songs, needsDeezerLookup: pl.needsDeezerLookup });
   }
- 
+
   startGameBtn.disabled    = false;
   startGameBtn.textContent = '▶ Empezar partida';
 }
- 
+
 /* ──────────────────────────────────────────
    JUEGO: iniciar
 ────────────────────────────────────────── */
 function startGame(songs) {
   state.settings = Storage.getSettings();
- 
+
   const total = Math.min(state.settings.songsPerGame, songs.length);
   state.queue      = shuffle([...songs]).slice(0, total);
   state.currentIdx = 0;
@@ -235,159 +235,137 @@ function startGame(songs) {
   state.wrong      = 0;
   state.phasesUsed = [];
   state.history    = [];
- 
+
   showScreen('game');
   loadSong();
 }
- 
+
 /* ──────────────────────────────────────────
    JUEGO: cargar canción actual
 ────────────────────────────────────────── */
 function loadSong() {
   stopAudio();
+  if (audioPlayer.src && audioPlayer.src.startsWith('blob:')) {
+    URL.revokeObjectURL(audioPlayer.src);
+  }
   clearCountdown();
- 
+
   state.phase    = 0;
   state.answered = false;
- 
+
   const total   = state.queue.length;
   const current = state.currentIdx + 1;
- 
+
   // HUD
   hudSong.textContent  = `${current} / ${total}`;
   hudScore.textContent = state.score;
   hudStreak.textContent= `🔥 ${state.streak}`;
   progressBarFill.style.width = `${((current - 1) / total) * 100}%`;
- 
+
   // Timer HUD
   if (state.settings.timerEnabled) {
     hudTimerBlock.classList.remove('hidden');
   } else {
     hudTimerBlock.classList.add('hidden');
   }
- 
+
   // Fases: reset visual
   phaseSteps.forEach((el, i) => {
     if (!el) return;
     el.classList.remove('active', 'done');
   });
   setActivePhase(0);
- 
+
   // Player: reset
   playerCard.classList.remove('playing');
   waveform.classList.remove('playing');
-  playBtnIcon.textContent = '▶';
+  playBtnIcon.textContent = '…';
   playBtn.classList.remove('loading', 'disabled');
-  playBtn.disabled = false;
+  playBtn.disabled = true;   // se activa cuando el blob esté listo
   phaseDurationLabel.textContent = '1 segundo';
- 
+
   // Guess area: reset
   feedbackArea.classList.add('hidden');
   guessInput.value   = '';
   guessInput.disabled= false;
   autocompleteList.classList.add('hidden');
- 
+
   skipBtn.disabled    = false;
   giveUpBtn.disabled  = false;
   submitGuessBtn.disabled = false;
- 
-  skipBtn.style.display    = state.settings.skipEnabled ? '' : 'none';
- 
-  // Precargar audio
+
+  skipBtn.style.display = state.settings.skipEnabled ? '' : 'none';
+
+  // Precargar audio como Blob para evitar bloqueos CORS
   const song = state.queue[state.currentIdx];
-  setAudioSrc(song.preview);
+  (async () => {
+    try {
+      playBtn.disabled = false;
+      playBtnIcon.textContent = '▶';
+
+    } catch {
+      playBtnIcon.textContent = '✕';
+      showToast('Audio no disponible para esta canción', 'error');
+    }
+  })();
 }
- 
-/* ──────────────────────────────────────────
-   Asignar src al audio con fallback a proxy
-────────────────────────────────────────── */
-const AUDIO_PROXIES = [
-  url => url,                                                          // directo (primero)
-  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,          // corsproxy.io
-  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, // allorigins raw
-];
-let currentAudioProxyIdx = 0;
-let currentPreviewUrl    = '';
- 
-function setAudioSrc(url) {
-  currentPreviewUrl    = url;
-  currentAudioProxyIdx = 0;
-  audioPlayer.src = url;
-  audioPlayer.load();
-}
- 
-function tryNextAudioProxy() {
-  currentAudioProxyIdx++;
-  if (currentAudioProxyIdx >= AUDIO_PROXIES.length) return false;
-  const proxied = AUDIO_PROXIES[currentAudioProxyIdx](currentPreviewUrl);
-  audioPlayer.src = proxied;
-  audioPlayer.load();
-  return true;
-}
- 
+
 /* ──────────────────────────────────────────
    JUEGO: reproducir fragmento de la fase actual
 ────────────────────────────────────────── */
 playBtn.addEventListener('click', () => {
   if (state.answered) return;
-  if (state.isPlaying) { stopAudio(); return; }
+  if (state.isPlaying) {
+    stopAudio();
+    return;
+  }
   playCurrentPhase();
 });
- 
-function playCurrentPhase() {
-  const dur = PHASE_DURATIONS[state.phase];
-  const { volume } = state.settings;
- 
+
+async function playCurrentPhase() {
+  const dur  = PHASE_DURATIONS[state.phase];
+  const song = state.queue[state.currentIdx];
+
   playBtn.classList.add('loading');
   playBtnIcon.textContent = '…';
- 
-  audioPlayer.volume = (volume ?? 80) / 100;
-  audioPlayer.currentTime = 0;
- 
-  audioPlayer.play().then(() => {
-    onAudioStarted(dur);
-  }).catch(() => {
-    // Intentar con el siguiente proxy
-    if (tryNextAudioProxy()) {
-      audioPlayer.addEventListener('canplay', function onCanPlay() {
-        audioPlayer.removeEventListener('canplay', onCanPlay);
-        audioPlayer.volume = (volume ?? 80) / 100;
-        audioPlayer.currentTime = 0;
-        audioPlayer.play().then(() => onAudioStarted(dur)).catch(onAudioFailed);
-      }, { once: true });
-      audioPlayer.addEventListener('error', function onErr() {
-        audioPlayer.removeEventListener('error', onErr);
-        if (!tryNextAudioProxy()) onAudioFailed();
-      }, { once: true });
-    } else {
-      onAudioFailed();
+
+  // Refrescar la URL de preview (puede haber caducado)
+  try {
+    const results = await DeezerAPI.searchNormalized(`${song.title} ${song.artist}`, 1);
+    if (results.length && results[0].preview) {
+      song.preview = results[0].preview;  // actualizar con URL fresca
     }
+  } catch { /* si falla la búsqueda, intentar con la URL que tenemos */ }
+
+  audioPlayer.removeAttribute('crossorigin');
+  audioPlayer.src = song.preview;
+  audioPlayer.load();
+  audioPlayer.volume = state.settings.volume / 100;
+  audioPlayer.currentTime = 0;
+
+  audioPlayer.play().then(() => {
+    state.isPlaying = true;
+    playBtn.classList.remove('loading');
+    playBtnIcon.textContent = '■';
+    playerCard.classList.add('playing');
+    waveform.classList.add('playing');
+    animateWave();
+
+    clearTimeout(state.phaseTimer);
+    state.phaseTimer = setTimeout(() => {
+      stopAudio();
+      if (state.settings.timerEnabled && !state.answered) {
+        startCountdown(state.settings.timerSeconds);
+      }
+    }, dur * 1000);
+
+  }).catch(() => {
+    playBtn.classList.remove('loading');
+    playBtnIcon.textContent = '▶';
+    showToast('Audio no disponible para esta canción', 'error');
   });
 }
- 
-function onAudioStarted(dur) {
-  state.isPlaying = true;
-  playBtn.classList.remove('loading');
-  playBtnIcon.textContent = '■';
-  playerCard.classList.add('playing');
-  waveform.classList.add('playing');
-  animateWave();
- 
-  clearTimeout(state.phaseTimer);
-  state.phaseTimer = setTimeout(() => {
-    stopAudio();
-    if (state.settings.timerEnabled && !state.answered) {
-      startCountdown(state.settings.timerSeconds);
-    }
-  }, dur * 1000);
-}
- 
-function onAudioFailed() {
-  playBtn.classList.remove('loading');
-  playBtnIcon.textContent = '▶';
-  showToast('Audio no disponible para esta canción — pulsa "No sé" para continuar', 'error');
-}
- 
+
 function stopAudio() {
   clearTimeout(state.phaseTimer);
   audioPlayer.pause();
@@ -397,7 +375,7 @@ function stopAudio() {
   playerCard.classList.remove('playing');
   waveform.classList.remove('playing');
 }
- 
+
 /* ──────────────────────────────────────────
    Animación waveform (random heights)
 ────────────────────────────────────────── */
@@ -410,7 +388,7 @@ function animateWave() {
   });
   waveAnimFrame = setTimeout(animateWave, 120);
 }
- 
+
 /* ──────────────────────────────────────────
    Fases visuales
 ────────────────────────────────────────── */
@@ -420,12 +398,12 @@ function setActivePhase(phaseIdx) {
   phaseSteps.forEach((el, i) => {
     if (!el) return;
     const p = i - 1; // phaseSteps[1] → phase 0
-    if (p < phaseIdx)       el.className = 'phase-step done';
+    if (p < phaseIdx)        el.className = 'phase-step done';
     else if (p === phaseIdx) el.className = 'phase-step active';
-    else                    el.className = 'phase-step';
+    else                     el.className = 'phase-step';
   });
 }
- 
+
 /* ──────────────────────────────────────────
    Pasar fase / No sé
 ────────────────────────────────────────── */
@@ -435,14 +413,14 @@ skipBtn.addEventListener('click', () => {
   clearCountdown();
   advancePhase();
 });
- 
+
 giveUpBtn.addEventListener('click', () => {
   if (state.answered) return;
   stopAudio();
   clearCountdown();
   resolveRound(false);
 });
- 
+
 function advancePhase() {
   if (state.phase < PHASE_DURATIONS.length - 1) {
     state.phase++;
@@ -453,7 +431,7 @@ function advancePhase() {
     resolveRound(false);
   }
 }
- 
+
 /* ──────────────────────────────────────────
    Autocomplete mientras escribe
 ────────────────────────────────────────── */
@@ -462,7 +440,7 @@ guessInput.addEventListener('input', () => {
   clearTimeout(acDebounce);
   const val = guessInput.value.trim();
   if (val.length < 2) { autocompleteList.classList.add('hidden'); return; }
- 
+
   acDebounce = setTimeout(async () => {
     try {
       const results = await DeezerAPI.searchNormalized(val, 6);
@@ -471,7 +449,7 @@ guessInput.addEventListener('input', () => {
     } catch { /* silent */ }
   }, 350);
 });
- 
+
 function renderAutocomplete(tracks) {
   autocompleteList.innerHTML = '';
   tracks.forEach(t => {
@@ -491,34 +469,34 @@ function renderAutocomplete(tracks) {
   });
   autocompleteList.classList.remove('hidden');
 }
- 
+
 guessInput.addEventListener('blur', () => {
   setTimeout(() => autocompleteList.classList.add('hidden'), 200);
 });
- 
+
 guessInput.addEventListener('keydown', e => {
   if (e.key === 'Enter') { autocompleteList.classList.add('hidden'); submitGuess(); }
   if (e.key === 'Escape') autocompleteList.classList.add('hidden');
 });
- 
+
 /* ──────────────────────────────────────────
    Confirmar respuesta
 ────────────────────────────────────────── */
 submitGuessBtn.addEventListener('click', submitGuess);
- 
+
 function submitGuess() {
   if (state.answered) return;
   const answer = guessInput.value.trim();
   if (!answer) { guessInput.focus(); return; }
- 
+
   const song    = state.queue[state.currentIdx];
   const correct = isCorrectGuess(answer, song.title, song.artist);
- 
+
   clearCountdown();
   stopAudio();
   resolveRound(correct);
 }
- 
+
 /* ── Comparación flexible ── */
 function normalize(str) {
   return str.toLowerCase()
@@ -527,16 +505,16 @@ function normalize(str) {
     .replace(/\s+/g, ' ')
     .trim();
 }
- 
+
 function isCorrectGuess(answer, title, artist) {
   const a = normalize(answer);
   const t = normalize(title);
   const ar= normalize(artist);
- 
+
   if (a === t) return true;
   if (t.includes(a) && a.length >= 3) return true;
   if (a.includes(t) && t.length >= 3) return true;
- 
+
   // Comprobar que al menos 70% de palabras del título estén en la respuesta
   const titleWords  = t.split(' ').filter(w => w.length > 2);
   const answerWords = a.split(' ');
@@ -544,17 +522,17 @@ function isCorrectGuess(answer, title, artist) {
     const matches = titleWords.filter(w => answerWords.some(aw => aw.includes(w) || w.includes(aw)));
     if (matches.length / titleWords.length >= 0.7) return true;
   }
- 
+
   return false;
 }
- 
+
 /* ──────────────────────────────────────────
    Resolver ronda (correcto / incorrecto)
 ────────────────────────────────────────── */
 function resolveRound(correct) {
   state.answered = true;
   const song = state.queue[state.currentIdx];
- 
+
   let pts = 0;
   if (correct) {
     pts = POINTS[`phase${state.phase + 1}`] || 250;
@@ -571,29 +549,29 @@ function resolveRound(correct) {
     state.wrong++;
     state.phasesUsed.push(0); // no acertada
   }
- 
+
   state.history.push({ song, correct, phase: state.phase + 1, points: pts });
- 
+
   // Actualizar HUD
   hudScore.textContent  = state.score;
   hudStreak.textContent = `🔥 ${state.streak}`;
- 
+
   // Deshabilitar inputs
   guessInput.disabled       = true;
   skipBtn.disabled          = true;
   giveUpBtn.disabled        = true;
   submitGuessBtn.disabled   = true;
- 
+
   showFeedback(correct, song, pts);
 }
- 
+
 /* ──────────────────────────────────────────
    Mostrar feedback
 ────────────────────────────────────────── */
 function showFeedback(correct, song, pts) {
   feedbackCard.className = 'feedback-card ' + (correct ? 'correct' : 'wrong');
   feedbackResult.textContent = correct ? '✓' : '✗';
- 
+
   feedbackSong.innerHTML = `
     <img class="feedback-cover" src="${song.cover || ''}" alt="" onerror="this.style.opacity=0" />
     <div class="feedback-song-info">
@@ -601,7 +579,7 @@ function showFeedback(correct, song, pts) {
       <div class="feedback-song-artist">${state.settings.showArtist || !correct ? escHtml(song.artist) : ''}</div>
     </div>
   `;
- 
+
   if (correct) {
     feedbackPoints.className = 'feedback-points positive';
     feedbackPoints.textContent = `+${pts} pts`;
@@ -609,15 +587,15 @@ function showFeedback(correct, song, pts) {
     feedbackPoints.className = 'feedback-points zero';
     feedbackPoints.textContent = '+0 pts';
   }
- 
+
   // Cambiar texto del botón si es la última
   const isLast = state.currentIdx >= state.queue.length - 1;
   nextSongBtn.textContent = isLast ? 'Ver resultados →' : 'Siguiente canción →';
- 
+
   feedbackArea.classList.remove('hidden');
   nextSongBtn.focus();
 }
- 
+
 nextSongBtn.addEventListener('click', () => {
   const isLast = state.currentIdx >= state.queue.length - 1;
   if (isLast) {
@@ -627,7 +605,7 @@ nextSongBtn.addEventListener('click', () => {
     loadSong();
   }
 });
- 
+
 /* ──────────────────────────────────────────
    Countdown timer de respuesta
 ────────────────────────────────────────── */
@@ -635,7 +613,7 @@ function startCountdown(seconds) {
   state.countdownSec = seconds;
   hudTimer.textContent = seconds;
   hudTimerBlock.classList.remove('hidden');
- 
+
   state.countdownInt = setInterval(() => {
     state.countdownSec--;
     hudTimer.textContent = state.countdownSec;
@@ -646,27 +624,27 @@ function startCountdown(seconds) {
     }
   }, 1000);
 }
- 
+
 function clearCountdown() {
   clearInterval(state.countdownInt);
   hudTimer.textContent = state.settings.timerSeconds || 30;
   hudTimer.style.color = '';
 }
- 
+
 /* ──────────────────────────────────────────
    FIN DE PARTIDA
 ────────────────────────────────────────── */
 function finishGame() {
   stopAudio();
   clearCountdown();
- 
-  const total     = state.queue.length;
-  const correct   = state.correct;
-  const wrong     = state.wrong;
-  const avgPhase  = state.phasesUsed.filter(p => p > 0).length
+
+  const total    = state.queue.length;
+  const correct  = state.correct;
+  const wrong    = state.wrong;
+  const avgPhase = state.phasesUsed.filter(p => p > 0).length
     ? (state.phasesUsed.filter(p => p > 0).reduce((a,b) => a+b, 0) / state.phasesUsed.filter(p => p > 0).length).toFixed(1)
     : '-';
- 
+
   // Guardar puntuación
   Storage.addScore({
     playlistId  : state.playlist.id,
@@ -677,25 +655,25 @@ function finishGame() {
     avgPhase,
     total,
   });
- 
+
   // Trophy según resultado
   const pct = correct / total;
   resultsTrophy.textContent = pct >= 0.8 ? '🏆' : pct >= 0.5 ? '🥈' : '💪';
   resultsTitle.textContent  = pct >= 0.8 ? '¡Increíble!' : pct >= 0.5 ? '¡Bien hecho!' : '¡Sigue practicando!';
- 
+
   resultsFinalScore.textContent = state.score;
   statCorrect.textContent    = correct;
   statWrong.textContent      = wrong;
   statBestStreak.textContent = state.bestStreak;
   statAvgPhase.textContent   = avgPhase;
- 
+
   progressBarFill.style.width = '100%';
- 
+
   renderHistorySongs();
   renderLeaderboard();
   showScreen('results');
 }
- 
+
 /* ── Lista de canciones de la partida ── */
 function renderHistorySongs() {
   historySongList.innerHTML = '';
@@ -715,20 +693,20 @@ function renderHistorySongs() {
     historySongList.appendChild(item);
   });
 }
- 
+
 /* ── Leaderboard ── */
 function renderLeaderboard() {
   leaderboardList.innerHTML = '';
   const scores = Storage.getScores().slice(0, 10);
- 
+
   if (!scores.length) {
     leaderboardList.innerHTML = '<div class="empty-state" style="padding:1.5rem"><p>Sin partidas aún</p></div>';
     return;
   }
- 
+
   const medals = ['🥇', '🥈', '🥉'];
   const rankClasses = ['gold', 'silver', 'bronze'];
- 
+
   scores.forEach((s, i) => {
     const item = document.createElement('div');
     item.className = 'lb-item' + (i === 0 ? ' current-game' : '');
@@ -744,7 +722,7 @@ function renderLeaderboard() {
     leaderboardList.appendChild(item);
   });
 }
- 
+
 /* ──────────────────────────────────────────
    Jugar de nuevo / Volver al lobby
 ────────────────────────────────────────── */
@@ -753,7 +731,7 @@ playAgainBtn.addEventListener('click', () => {
   const songs = state.playlist.songs.filter(s => s.preview);
   startGame(songs);
 });
- 
+
 /* ──────────────────────────────────────────
    Util
 ────────────────────────────────────────── */
@@ -764,13 +742,13 @@ function shuffle(arr) {
   }
   return arr;
 }
- 
+
 function escHtml(str) {
   return String(str)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
- 
+
 /* ──────────────────────────────────────────
    Init
 ────────────────────────────────────────── */
