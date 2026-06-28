@@ -391,12 +391,17 @@
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+  cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
   animation: fadeIn 0.2s ease both;
 }
 .score-row:hover {
-  border-color: var(--border-strong);
-  background: var(--bg-hover);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+.score-row:hover .score-chevron {
+  color: var(--accent);
+  transform: translateX(2px);
 }
 
 .score-medal {
@@ -454,7 +459,182 @@
 .score-pct.mid  { background: var(--accent-dim);  color: var(--accent);  }
 .score-pct.low  { background: var(--danger-dim);  color: var(--danger);  }
 
+.score-chevron {
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  transition: color 0.2s, transform 0.2s;
+  margin-left: 0.1rem;
+}
+
 /* Responsive: right column stacks on narrow screens */
 @media (max-width: 900px) {
   .right-column { gap: 1rem; }
+}
+
+/* ══════════════════════════════════════
+   SCORE DETAIL MODAL
+══════════════════════════════════════ */
+.sd-header {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.25rem;
+}
+
+.sd-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.sd-playlist {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.sd-date {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
+.sd-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.6rem;
+}
+
+.sd-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.65rem 0.4rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.sd-stat-num {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+}
+.sd-stat-num.accent    { color: var(--accent); }
+.sd-stat-num.high-text { color: var(--success); }
+.sd-stat-num.mid-text  { color: var(--accent); }
+.sd-stat-num.low-text  { color: var(--danger); }
+
+.sd-stat-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sd-songs-title {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.6rem;
+}
+
+.sd-songs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  max-height: 340px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.sd-song-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+}
+.sd-song-row:last-child { border-bottom: none; }
+.sd-song-row:hover { background: var(--bg-hover); }
+
+.sd-song-num {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  width: 18px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.sd-song-status {
+  font-size: 0.85rem;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+  font-weight: 700;
+}
+.sd-song-status.ok   { color: var(--success); }
+.sd-song-status.fail { color: var(--danger); }
+
+.sd-song-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+}
+
+.sd-song-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sd-song-artist {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sd-song-phase {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  min-width: 42px;
+  text-align: right;
+}
+.sd-song-phase.fail { color: var(--danger); }
+
+.sd-no-songs {
+  padding: 1.5rem 0 0.5rem;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+@media (max-width: 480px) {
+  .sd-stats { grid-template-columns: repeat(2, 1fr); }
+  .sd-song-artist { display: none; }
 }

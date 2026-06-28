@@ -318,11 +318,9 @@ function startPlaybackProgress(durationSec) {
   playbackProgressFill.style.width = '0%';
   playbackProgressWrap.classList.add('visible');
 
-  // Use a CSS transition for smooth fill: set duration and go to 100%
-  // Tiny timeout to ensure the reset frame has painted first
   void playbackProgressFill.offsetWidth; // fuerza reflow
   playbackProgressFill.style.transition = `width ${durationSec}s linear`;
-  playbackProgressFill.style.width = '102%';
+  playbackProgressFill.style.width = '110%';
 }
 
 function resetPlaybackProgress() {
@@ -373,7 +371,6 @@ async function playCurrentPhase() {
       waveform.classList.add('playing');
       animateWave();
 
-      // Start the fragment progress bar
       startPlaybackProgress(dur);
  
       clearTimeout(state.phaseTimer);
@@ -422,7 +419,6 @@ function stopAudio() {
   playBtnIcon.textContent = '▶';
   playerCard.classList.remove('playing');
   waveform.classList.remove('playing');
-  // Freeze the progress bar at current position
   const fill = playbackProgressFill;
   const computed = getComputedStyle(fill).width;
   const wrapWidth = playbackProgressWrap.offsetWidth;
@@ -481,7 +477,6 @@ listenPreviewBtn.addEventListener('click', () => {
       listenPreviewBtn.querySelector('.listen-icon').textContent = '■';
       listenPreviewBtn.querySelector('.listen-label').textContent = 'Parar';
 
-      // Animate progress bar over the full preview duration (Deezer ~30s)
       const dur = audio.duration || 30;
       listenProgressWrap.classList.add('visible');
       listenProgressFill.style.transition = 'none';
@@ -569,7 +564,8 @@ function advancePhase() {
 }
  
 /* ──────────────────────────────────────────
-   Autocomplete — solo canciones de la playlist
+   Autocomplete — todas las canciones de la playlist
+   (no solo las seleccionadas para esta ronda)
 ────────────────────────────────────────── */
 guessInput.addEventListener('input', () => {
   const val = guessInput.value.trim().toLowerCase();
@@ -578,8 +574,11 @@ guessInput.addEventListener('input', () => {
     autocompleteList.classList.add('hidden');
     return;
   }
- 
-  const matches = state.queue.filter(s => {
+
+  // Buscar en TODAS las canciones de la playlist, no solo en state.queue
+  const allSongs = state.playlist ? state.playlist.songs : state.queue;
+
+  const matches = allSongs.filter(s => {
     const title  = normalize(s.title);
     const artist = normalize(s.artist);
     const query  = normalize(val);
@@ -721,7 +720,6 @@ function resolveRound(correct) {
    Feedback
 ────────────────────────────────────────── */
 function showFeedback(correct, song, pts) {
-  // Reset listen preview state before showing feedback
   stopPreviewAudio();
 
   feedbackCard.className     = 'feedback-card ' + (correct ? 'correct' : 'wrong');
@@ -800,6 +798,14 @@ function finishGame() {
   const avgPhase = phasesOk.length
     ? (phasesOk.reduce((a, b) => a + b, 0) / phasesOk.length).toFixed(1)
     : '-';
+
+  // Historial compacto: solo título, artista, fase y acierto
+  const songHistory = state.history.map(h => ({
+    t: h.song.title,   // title
+    a: h.song.artist,  // artist
+    p: h.phase,        // phase (0 = no acertada)
+    c: h.correct ? 1 : 0,
+  }));
  
   Storage.addScore({
     playlistId  : state.playlist.id,
@@ -809,6 +815,7 @@ function finishGame() {
     bestStreak  : state.bestStreak,
     avgPhase,
     total,
+    songs       : songHistory,
   });
  
   const pct = correct / total;
@@ -869,14 +876,47 @@ function renderLeaderboard() {
     const isCurrent = s.score === currentScore && (currentDate - s.date) < 5000;
     item.className = 'lb-item' + (isCurrent ? ' current-game' : '');
     const date = new Date(s.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+
+    // Botón expandir historial de canciones si hay datos
+    const hasSongs = s.songs && s.songs.length > 0;
+
     item.innerHTML = `
       <span class="lb-rank ${rankClasses[i] || ''}">${medals[i] || (i + 1)}</span>
       <div class="lb-info">
         <div class="lb-playlist">${escHtml(s.playlistName)}</div>
         <div class="lb-date">${date} · ${s.correct}/${s.total} acertadas</div>
       </div>
-      <span class="lb-score">${s.score}</span>
+      <div class="lb-right">
+        <span class="lb-score">${s.score}</span>
+        ${hasSongs ? `<button class="lb-expand-btn" aria-label="Ver canciones" title="Ver canciones">▾</button>` : ''}
+      </div>
     `;
+
+    if (hasSongs) {
+      // Panel de canciones colapsable
+      const songPanel = document.createElement('div');
+      songPanel.className = 'lb-song-panel hidden';
+      songPanel.innerHTML = s.songs.map(song => `
+        <div class="lb-song-row">
+          <span class="lb-song-status ${song.c ? 'ok' : 'fail'}">${song.c ? '✓' : '✗'}</span>
+          <span class="lb-song-title">${escHtml(song.t)}</span>
+          <span class="lb-song-artist">${escHtml(song.a)}</span>
+          <span class="lb-song-phase">${song.c ? `F${song.p}` : '—'}</span>
+        </div>
+      `).join('');
+
+      item.appendChild(songPanel);
+
+      const expandBtn = item.querySelector('.lb-expand-btn');
+      expandBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = !songPanel.classList.contains('hidden');
+        songPanel.classList.toggle('hidden', isOpen);
+        expandBtn.textContent = isOpen ? '▾' : '▴';
+        expandBtn.classList.toggle('open', !isOpen);
+      });
+    }
+
     leaderboardList.appendChild(item);
   });
 }

@@ -45,6 +45,10 @@ const editNameInput      = $('editNameInput');
 const editEmojiInput     = $('editEmojiInput');
 const savePlaylistNameBtn = $('savePlaylistNameBtn');
 
+const modalScoreDetail   = $('modalScoreDetail');
+const closeScoreModal    = $('closeScoreModal');
+const scoreDetailContent = $('scoreDetailContent');
+
 const toast = $('toast');
  
 /* ──────────────────────────────────────────
@@ -310,7 +314,6 @@ function openViewPlaylistModal(plId) {
   if (!pl) return;
   activeViewPl = plId;
 
-  // Rellenar inputs de edición con los valores actuales
   editNameInput.value  = pl.name;
   editEmojiInput.value = pl.emoji;
 
@@ -320,7 +323,6 @@ function openViewPlaylistModal(plId) {
   modalViewPlaylist.classList.remove('hidden');
 }
 
-/* Guardar nombre y emoji editados */
 savePlaylistNameBtn.addEventListener('click', () => {
   if (!activeViewPl) return;
   const name  = editNameInput.value.trim();
@@ -333,7 +335,6 @@ savePlaylistNameBtn.addEventListener('click', () => {
   showToast('Playlist actualizada', 'success');
 });
 
-/* Guardar también al pulsar Enter en el input de nombre */
 editNameInput.addEventListener('keydown', e => {
   if (e.key === 'Enter') savePlaylistNameBtn.click();
 });
@@ -366,11 +367,10 @@ function renderPlaylistSongs(pl) {
   });
 }
  
-/* Delegación de eventos para eliminar canciones del modal */
 playlistSongsList.addEventListener('click', e => {
   const btn = e.target.closest('.playlist-song-remove');
   if (!btn || !activeViewPl) return;
-  const songId = btn.dataset.songId;  // string, sin parseInt
+  const songId = btn.dataset.songId;
   Storage.removeSongFromPlaylist(activeViewPl, songId);
   const updated = Storage.getPlaylist(activeViewPl);
   renderPlaylistSongs(updated);
@@ -391,6 +391,85 @@ deletePlaylistBtn.addEventListener('click', () => {
   renderPlaylists();
   showToast('Playlist eliminada', 'success');
 });
+
+/* ──────────────────────────────────────────
+   Modal: detalle de partida (puntuaciones)
+────────────────────────────────────────── */
+function openScoreDetailModal(score) {
+  const date = new Date(score.date).toLocaleDateString('es-ES', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+  });
+  const pct = score.total ? Math.round((score.correct / score.total) * 100) : 0;
+  const pctClass = pct >= 80 ? 'high' : pct >= 50 ? 'mid' : 'low';
+
+  let html = `
+    <div class="sd-header">
+      <div class="sd-meta">
+        <span class="sd-playlist">${escHtml(score.playlistName || '—')}</span>
+        <span class="sd-date">${date}</span>
+      </div>
+      <div class="sd-stats">
+        <div class="sd-stat">
+          <span class="sd-stat-num accent">${score.score.toLocaleString('es-ES')}</span>
+          <span class="sd-stat-label">puntos</span>
+        </div>
+        <div class="sd-stat">
+          <span class="sd-stat-num">${score.correct}/${score.total}</span>
+          <span class="sd-stat-label">acertadas</span>
+        </div>
+        <div class="sd-stat">
+          <span class="sd-stat-num">${score.bestStreak || 0}</span>
+          <span class="sd-stat-label">racha máx.</span>
+        </div>
+        <div class="sd-stat">
+          <span class="sd-stat-num ${pctClass}-text">${pct}%</span>
+          <span class="sd-stat-label">acierto</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  if (score.songs && score.songs.length > 0) {
+    html += `
+      <div class="sd-songs-title">Canciones jugadas</div>
+      <div class="sd-songs-list">
+        ${score.songs.map((s, i) => `
+          <div class="sd-song-row">
+            <span class="sd-song-num">${i + 1}</span>
+            <span class="sd-song-status ${s.c ? 'ok' : 'fail'}">${s.c ? '✓' : '✗'}</span>
+            <div class="sd-song-info">
+              <span class="sd-song-title">${escHtml(s.t)}</span>
+              <span class="sd-song-artist">${escHtml(s.a)}</span>
+            </div>
+            <span class="sd-song-phase ${s.c ? '' : 'fail'}">${s.c ? `Fase ${s.p}` : 'Fallo'}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } else {
+    html += `
+      <div class="sd-no-songs">
+        <span>Esta partida no tiene detalle de canciones guardado.</span>
+      </div>
+    `;
+  }
+
+  scoreDetailContent.innerHTML = html;
+  modalScoreDetail.classList.remove('hidden');
+}
+
+function closeScoreDetailModal() {
+  modalScoreDetail.classList.add('hidden');
+}
+
+if (closeScoreModal) {
+  closeScoreModal.addEventListener('click', closeScoreDetailModal);
+}
+if (modalScoreDetail) {
+  modalScoreDetail.addEventListener('click', e => {
+    if (e.target === modalScoreDetail) closeScoreDetailModal();
+  });
+}
  
 /* ──────────────────────────────────────────
    Init

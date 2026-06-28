@@ -172,6 +172,19 @@
     </div>
   </div>
 
+  <!-- MODAL: Score detail -->
+  <div id="modalScoreDetail" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="scoreDetailTitle">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h3 id="scoreDetailTitle" class="modal-title">Detalle de partida</h3>
+        <button class="modal-close" id="closeScoreModal" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="modal-body" id="scoreDetailContent">
+        <!-- Injected by JS -->
+      </div>
+    </div>
+  </div>
+
   <!-- TOAST -->
   <div id="toast" class="toast hidden" aria-live="polite"></div>
 
@@ -195,10 +208,12 @@
 
       scores.forEach((s, i) => {
         const pct  = s.total ? Math.round((s.correct / s.total) * 100) : 0;
+        const pctClass = pct >= 80 ? 'high' : pct >= 50 ? 'mid' : 'low';
         const date = new Date(s.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
 
         const item = document.createElement('div');
         item.className = 'score-row';
+        item.title = 'Ver detalle de la partida';
         item.innerHTML = `
           <span class="score-medal">${medals[i] || (i + 1)}</span>
           <div class="score-info">
@@ -207,9 +222,11 @@
           </div>
           <div class="score-right">
             <span class="score-pts">${s.score.toLocaleString('es-ES')}</span>
-            <span class="score-pct ${pct >= 80 ? 'high' : pct >= 50 ? 'mid' : 'low'}">${pct}%</span>
+            <span class="score-pct ${pctClass}">${pct}%</span>
           </div>
+          <span class="score-chevron">›</span>
         `;
+        item.addEventListener('click', () => openScoreDetailModal(s));
         list.appendChild(item);
       });
     })();

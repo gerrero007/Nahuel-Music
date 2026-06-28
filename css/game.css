@@ -333,10 +333,9 @@
   background: var(--accent);
   border-radius: 99px;
   box-shadow: 0 0 6px var(--accent);
-  transition: none; /* controlled via JS */
+  transition: none;
 }
 
-/* When playing: smooth CSS transition for the fill */
 .playback-progress-fill.animating {
   transition: width linear;
 }
@@ -752,6 +751,7 @@
 /* ── Leaderboard items ── */
 .lb-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.85rem;
   padding: 0.75rem 1.25rem;
@@ -782,12 +782,107 @@
 }
 .lb-date { font-size: 0.72rem; color: var(--text-muted); }
 
+/* ── Leaderboard right side (score + expand) ── */
+.lb-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
 .lb-score {
   font-family: var(--font-display);
   font-size: 1rem;
   font-weight: 700;
   color: var(--accent);
+}
+
+.lb-expand-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  line-height: 1;
   flex-shrink: 0;
+}
+.lb-expand-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+.lb-expand-btn.open {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+/* ── Leaderboard song panel (expandible) ── */
+.lb-song-panel {
+  width: 100%;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  animation: fadeIn 0.15s ease;
+  /* ocupa toda la fila gracias al flex-wrap del padre */
+  flex-basis: 100%;
+  margin-top: 0.25rem;
+}
+
+.lb-song-panel.hidden { display: none; }
+
+.lb-song-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.78rem;
+}
+.lb-song-row:last-child { border-bottom: none; }
+
+.lb-song-status {
+  font-size: 0.8rem;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.lb-song-status.ok   { color: var(--success); }
+.lb-song-status.fail { color: var(--danger); }
+
+.lb-song-title {
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.lb-song-artist {
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+  flex-shrink: 0;
+}
+
+.lb-song-phase {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  flex-shrink: 0;
+  min-width: 22px;
+  text-align: right;
 }
 
 /* ── Results actions ── */
@@ -809,4 +904,5 @@
   .results-stats-row { grid-template-columns: repeat(2, 1fr); }
   .play-btn { width: 54px; height: 54px; font-size: 1.2rem; }
   .guess-actions { flex-wrap: wrap; }
+  .lb-song-artist { display: none; }
 }
