@@ -57,21 +57,41 @@
       </div>
     </section>
 
-    <!-- RIGHT: Playlists -->
-    <section class="panel playlists-panel">
-      <div class="panel-header">
-        <h2 class="panel-title">Mis playlists</h2>
-        <button id="newPlaylistBtn" class="btn btn-accent">+ Nueva</button>
-      </div>
+    <!-- RIGHT: Playlists + Scores -->
+    <aside class="right-column">
 
-      <div id="playlistsList" class="playlists-list">
-        <!-- Injected by JS -->
-        <div class="empty-state" id="playlistsEmpty">
-          <span class="empty-icon">📁</span>
-          <p>Aún no tienes playlists.<br/>Crea una para empezar.</p>
+      <!-- Playlists -->
+      <section class="panel playlists-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">Mis playlists</h2>
+          <button id="newPlaylistBtn" class="btn btn-accent">+ Nueva</button>
         </div>
-      </div>
-    </section>
+
+        <div id="playlistsList" class="playlists-list">
+          <!-- Injected by JS -->
+          <div class="empty-state" id="playlistsEmpty">
+            <span class="empty-icon">📁</span>
+            <p>Aún no tienes playlists.<br/>Crea una para empezar.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Recent Scores -->
+      <section class="panel scores-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">Últimas partidas</h2>
+          <a href="game.html" class="btn btn-accent">▶ Jugar</a>
+        </div>
+        <div id="recentScoresList" class="recent-scores-list">
+          <!-- Injected by JS -->
+          <div class="empty-state" id="scoresEmpty">
+            <span class="empty-icon">🎮</span>
+            <p>Juega tu primera partida<br/>para ver tus puntuaciones.</p>
+          </div>
+        </div>
+      </section>
+
+    </aside>
 
   </main>
 
@@ -136,5 +156,41 @@
   <script src="js/storage.js"></script>
   <script src="js/api.js"></script>
   <script src="js/index.js"></script>
+  <script>
+    /* ── Render recent scores on the index page ── */
+    (function renderIndexScores() {
+      const list    = document.getElementById('recentScoresList');
+      const empty   = document.getElementById('scoresEmpty');
+      const scores  = Storage.getScores().slice(0, 5);   // top 5
+
+      if (!scores.length) {
+        empty.style.display = '';
+        return;
+      }
+
+      empty.style.display = 'none';
+      const medals = ['🥇', '🥈', '🥉'];
+
+      scores.forEach((s, i) => {
+        const pct  = s.total ? Math.round((s.correct / s.total) * 100) : 0;
+        const date = new Date(s.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+
+        const item = document.createElement('div');
+        item.className = 'score-row';
+        item.innerHTML = `
+          <span class="score-medal">${medals[i] || (i + 1)}</span>
+          <div class="score-info">
+            <div class="score-playlist">${s.playlistName || '—'}</div>
+            <div class="score-meta">${date} &middot; ${s.correct}/${s.total} aciertos &middot; racha ${s.bestStreak || 0}</div>
+          </div>
+          <div class="score-right">
+            <span class="score-pts">${s.score.toLocaleString('es-ES')}</span>
+            <span class="score-pct ${pct >= 80 ? 'high' : pct >= 50 ? 'mid' : 'low'}">${pct}%</span>
+          </div>
+        `;
+        list.appendChild(item);
+      });
+    })();
+  </script>
 </body>
 </html>

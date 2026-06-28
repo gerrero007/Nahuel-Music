@@ -5,7 +5,7 @@
 /* ──────────────────────────────────────────
    Constantes
 ────────────────────────────────────────── */
-const PHASE_DURATIONS = [0.3, 2, 5, 10];  // segundos por fase (índice 0-3)
+const PHASE_DURATIONS = [0.3, 1, 5, 10];  // segundos por fase (índice 0-3)
  
 const POINTS = {
   phase1  : 1000,
@@ -402,7 +402,7 @@ function animateWave() {
    Fases visuales
 ────────────────────────────────────────── */
 function setActivePhase(phaseIdx) {
-  const labels = ['0.3 segundos', '2 segundos', '5 segundos', '10 segundos'];
+  const labels = ['0.3 segundos', '1 segundo', '5 segundos', '10 segundos'];
   phaseDurationLabel.textContent = labels[phaseIdx];
   phaseSteps.forEach((el, i) => {
     if (!el) return;
