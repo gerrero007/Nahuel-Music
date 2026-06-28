@@ -41,7 +41,10 @@ const modalViewTitle     = $('modalViewTitle');
 const playlistSongsList  = $('playlistSongsList');
 const closeViewModal     = $('closeViewModal');
 const deletePlaylistBtn  = $('deletePlaylistBtn');
- 
+const editNameInput      = $('editNameInput');
+const editEmojiInput     = $('editEmojiInput');
+const savePlaylistNameBtn = $('savePlaylistNameBtn');
+
 const toast = $('toast');
  
 /* ──────────────────────────────────────────
@@ -306,11 +309,34 @@ function openViewPlaylistModal(plId) {
   const pl = Storage.getPlaylist(plId);
   if (!pl) return;
   activeViewPl = plId;
+
+  // Rellenar inputs de edición con los valores actuales
+  editNameInput.value  = pl.name;
+  editEmojiInput.value = pl.emoji;
+
   modalViewTitle.textContent = `${pl.emoji} ${pl.name}`;
   Storage.setActivePlaylist(plId);
   renderPlaylistSongs(pl);
   modalViewPlaylist.classList.remove('hidden');
 }
+
+/* Guardar nombre y emoji editados */
+savePlaylistNameBtn.addEventListener('click', () => {
+  if (!activeViewPl) return;
+  const name  = editNameInput.value.trim();
+  const emoji = editEmojiInput.value.trim() || '🎵';
+  if (!name) { editNameInput.focus(); showToast('Escribe un nombre', 'error'); return; }
+
+  Storage.updatePlaylist(activeViewPl, { name, emoji });
+  modalViewTitle.textContent = `${emoji} ${name}`;
+  renderPlaylists();
+  showToast('Playlist actualizada', 'success');
+});
+
+/* Guardar también al pulsar Enter en el input de nombre */
+editNameInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') savePlaylistNameBtn.click();
+});
  
 function renderPlaylistSongs(pl) {
   playlistSongsList.innerHTML = '';
@@ -344,7 +370,7 @@ function renderPlaylistSongs(pl) {
 playlistSongsList.addEventListener('click', e => {
   const btn = e.target.closest('.playlist-song-remove');
   if (!btn || !activeViewPl) return;
-  const songId = parseInt(btn.dataset.songId);
+  const songId = btn.dataset.songId;  // string, sin parseInt
   Storage.removeSongFromPlaylist(activeViewPl, songId);
   const updated = Storage.getPlaylist(activeViewPl);
   renderPlaylistSongs(updated);
@@ -370,4 +396,3 @@ deletePlaylistBtn.addEventListener('click', () => {
    Init
 ────────────────────────────────────────── */
 renderPlaylists();
- 

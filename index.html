@@ -139,6 +139,28 @@
         <button class="modal-close" id="closeViewModal" aria-label="Cerrar">✕</button>
       </div>
       <div class="modal-body">
+
+        <!-- Editar nombre y emoji -->
+        <div style="display:flex; gap:0.5rem; margin-bottom:1rem;">
+          <input
+            type="text"
+            id="editEmojiInput"
+            class="form-input emoji-input"
+            placeholder="🎵"
+            maxlength="2"
+            style="width:56px; flex-shrink:0; text-align:center;"
+          />
+          <input
+            type="text"
+            id="editNameInput"
+            class="form-input"
+            placeholder="Nombre de la playlist…"
+            maxlength="50"
+            style="flex:1;"
+          />
+          <button id="savePlaylistNameBtn" class="btn btn-primary" style="flex-shrink:0;">Guardar</button>
+        </div>
+
         <div id="playlistSongsList" class="playlist-songs-list">
           <!-- Injected by JS -->
         </div>
