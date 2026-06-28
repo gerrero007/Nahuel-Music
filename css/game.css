@@ -312,6 +312,35 @@
   50%       { height: 40px; }
 }
 
+/* ── Playback progress bar (fragment duration) ── */
+.playback-progress-wrap {
+  width: 100%;
+  height: 3px;
+  background: var(--border);
+  border-radius: 99px;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.playback-progress-wrap.visible {
+  opacity: 1;
+}
+
+.playback-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 99px;
+  box-shadow: 0 0 6px var(--accent);
+  transition: none; /* controlled via JS */
+}
+
+/* When playing: smooth CSS transition for the fill */
+.playback-progress-fill.animating {
+  transition: width linear;
+}
+
 /* ── Play button ── */
 .play-btn {
   width: 64px; height: 64px;
@@ -491,6 +520,67 @@
 }
 .feedback-points.positive { color: var(--success); }
 .feedback-points.zero     { color: var(--text-muted); }
+
+/* ── Listen preview button ── */
+.listen-preview-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  padding: 0.45rem 1rem;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.listen-preview-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.listen-preview-btn.playing {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.listen-preview-btn .listen-icon {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+/* ── Preview mini progress ── */
+.listen-progress-wrap {
+  width: 100%;
+  height: 2px;
+  background: var(--border);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-top: -0.25rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.listen-progress-wrap.visible {
+  opacity: 1;
+}
+
+.listen-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 99px;
+  transition: none;
+}
+
+.listen-progress-fill.animating {
+  transition: width linear;
+}
 
 /* ══════════════════════════════════════
    RESULTS SCREEN

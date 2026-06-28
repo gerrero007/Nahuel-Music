@@ -92,7 +92,7 @@
           <div class="phase-sep">→</div>
           <div class="phase-step" id="phase2" data-phase="2">
             <span class="phase-num">2</span>
-            <span class="phase-secs">1 seg</span>
+            <span class="phase-secs">2 seg</span>
           </div>
           <div class="phase-sep">→</div>
           <div class="phase-step" id="phase3" data-phase="3">
@@ -115,6 +115,11 @@
               <span></span><span></span><span></span><span></span><span></span>
             </div>
             <audio id="audioPlayer" preload="none"></audio>
+          </div>
+
+          <!-- Playback progress bar for current fragment -->
+          <div class="playback-progress-wrap" id="playbackProgressWrap">
+            <div class="playback-progress-fill" id="playbackProgressFill"></div>
           </div>
  
           <button id="playBtn" class="play-btn" aria-label="Reproducir fragmento">
@@ -164,6 +169,17 @@
             <div class="feedback-points" id="feedbackPoints">
               <!-- Points injected -->
             </div>
+
+            <!-- Listen to preview button -->
+            <button id="listenPreviewBtn" class="listen-preview-btn" aria-label="Escuchar preview">
+              <span class="listen-icon">▶</span>
+              <span class="listen-label">Escuchar canción</span>
+            </button>
+            <!-- Mini progress bar for the preview playback -->
+            <div class="listen-progress-wrap" id="listenProgressWrap">
+              <div class="listen-progress-fill" id="listenProgressFill"></div>
+            </div>
+
             <button id="nextSongBtn" class="btn btn-primary btn-large">
               Siguiente canción →
             </button>

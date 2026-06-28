@@ -39,6 +39,14 @@ let state = {
   isPlaying    : false,
   answered     : false,
   settings     : {},
+  // Playback progress bar
+  playbackRAF  : null,
+  playbackStart: null,
+  playbackDur  : 0,
+  // Listen preview
+  previewAudio : null,
+  previewPlaying: false,
+  previewRAF   : null,
 };
  
 /* ──────────────────────────────────────────
@@ -61,6 +69,9 @@ const hudStreak       = $('hudStreak');
 const hudTimerBlock   = $('hudTimerBlock');
 const hudTimer        = $('hudTimer');
 const progressBarFill = $('progressBarFill');
+
+const playbackProgressWrap = $('playbackProgressWrap');
+const playbackProgressFill = $('playbackProgressFill');
  
 const phaseSteps         = [null, $('phase1'), $('phase2'), $('phase3'), $('phase4')];
 const phaseDurationLabel = $('phaseDuration');
@@ -77,12 +88,15 @@ const skipBtn          = $('skipBtn');
 const giveUpBtn        = $('giveUpBtn');
 const submitGuessBtn   = $('submitGuessBtn');
  
-const feedbackArea   = $('feedbackArea');
-const feedbackCard   = $('feedbackCard');
-const feedbackResult = $('feedbackResult');
-const feedbackSong   = $('feedbackSong');
-const feedbackPoints = $('feedbackPoints');
-const nextSongBtn    = $('nextSongBtn');
+const feedbackArea      = $('feedbackArea');
+const feedbackCard      = $('feedbackCard');
+const feedbackResult    = $('feedbackResult');
+const feedbackSong      = $('feedbackSong');
+const feedbackPoints    = $('feedbackPoints');
+const listenPreviewBtn  = $('listenPreviewBtn');
+const listenProgressWrap = $('listenProgressWrap');
+const listenProgressFill = $('listenProgressFill');
+const nextSongBtn       = $('nextSongBtn');
  
 const resultsTrophy     = $('resultsTrophy');
 const resultsTitle      = $('resultsTitle');
@@ -211,7 +225,8 @@ async function enrichWithDeezerPreviews(pl) {
 ────────────────────────────────────────── */
 function startGame(songs) {
   state.settings = Storage.getSettings();
- 
+  stopPreviewAudio();
+
   const total      = Math.min(state.settings.songsPerGame, songs.length);
   state.queue      = shuffle([...songs]).slice(0, total);
   state.currentIdx = 0;
@@ -232,11 +247,13 @@ function startGame(songs) {
 ────────────────────────────────────────── */
 function loadSong() {
   stopAudio();
+  stopPreviewAudio();
   clearCountdown();
+  resetPlaybackProgress();
  
   state.phase    = 0;
   state.answered = false;
-  state.audioReady = false;  // FLAG: indica si el audio ya ha bufereado suficiente
+  state.audioReady = false;
  
   const total   = state.queue.length;
   const current = state.currentIdx + 1;
@@ -272,26 +289,49 @@ function loadSong() {
   skipBtn.style.display   = state.settings.skipEnabled ? '' : 'none';
  
   const song = state.queue[state.currentIdx];
-  state.randomStart = Math.floor(Math.random() * 21);   // 0-20
+  state.randomStart = Math.floor(Math.random() * 21);
 
-  // Precarga del audio: configurar src y empezar a bufferear en silencio
-  // para que cuando el usuario pulse play en fase 1 (0.3s) ya esté listo.
   audioPlayer.removeAttribute('crossorigin');
   audioPlayer.src = song.preview;
-  audioPlayer.volume = 0;          // silencio durante la precarga
+  audioPlayer.volume = 0;
   audioPlayer.currentTime = 0;
   audioPlayer.load();
 
-  // Escuchar canplay para marcar el audio como listo y posicionarlo
   const onCanPlay = () => {
     audioPlayer.removeEventListener('canplay', onCanPlay);
     audioPlayer.currentTime = state.randomStart ?? 0;
-    audioPlayer.volume = 0;        // mantener silencio hasta que el usuario pulse play
+    audioPlayer.volume = 0;
     state.audioReady = true;
   };
   audioPlayer.addEventListener('canplay', onCanPlay);
 }
  
+/* ──────────────────────────────────────────
+   PLAYBACK PROGRESS BAR
+────────────────────────────────────────── */
+function startPlaybackProgress(durationSec) {
+  cancelAnimationFrame(state.playbackRAF);
+  state.playbackDur   = durationSec * 1000; // ms
+  state.playbackStart = performance.now();
+
+  playbackProgressFill.style.transition = 'none';
+  playbackProgressFill.style.width = '0%';
+  playbackProgressWrap.classList.add('visible');
+
+  // Use a CSS transition for smooth fill: set duration and go to 100%
+  // Tiny timeout to ensure the reset frame has painted first
+  void playbackProgressFill.offsetWidth; // fuerza reflow
+  playbackProgressFill.style.transition = `width ${durationSec}s linear`;
+  playbackProgressFill.style.width = '102%';
+}
+
+function resetPlaybackProgress() {
+  cancelAnimationFrame(state.playbackRAF);
+  playbackProgressFill.style.transition = 'none';
+  playbackProgressFill.style.width = '0%';
+  playbackProgressWrap.classList.remove('visible');
+}
+
 /* ──────────────────────────────────────────
    JUEGO: reproducir fragmento de la fase actual
 ────────────────────────────────────────── */
@@ -308,8 +348,6 @@ async function playCurrentPhase() {
   playBtn.classList.add('loading');
   playBtnIcon.textContent = '…';
 
-  // Solo refrescar la URL de Deezer si el audio aún no está listo
-  // (evita una petición de red innecesaria que retrasa la fase 1)
   if (!state.audioReady) {
     try {
       const results = await DeezerAPI.searchNormalized(`${song.title} ${song.artist}`, 1);
@@ -326,7 +364,6 @@ async function playCurrentPhase() {
   audioPlayer.volume      = (state.settings.volume ?? 80) / 100;
   audioPlayer.currentTime = state.randomStart ?? 0;
 
-  // Función que lanza realmente la reproducción
   const doPlay = () => {
     audioPlayer.play().then(() => {
       state.isPlaying = true;
@@ -335,6 +372,9 @@ async function playCurrentPhase() {
       playerCard.classList.add('playing');
       waveform.classList.add('playing');
       animateWave();
+
+      // Start the fragment progress bar
+      startPlaybackProgress(dur);
  
       clearTimeout(state.phaseTimer);
       state.phaseTimer = setTimeout(() => {
@@ -352,10 +392,8 @@ async function playCurrentPhase() {
   };
 
   if (state.audioReady) {
-    // El audio ya bufereó durante la carga de la canción → reproducir directo
     doPlay();
   } else {
-    // Esperar a canplay con un timeout de seguridad de 5 segundos
     const LOAD_TIMEOUT = 5000;
     let loadTimer;
 
@@ -369,7 +407,6 @@ async function playCurrentPhase() {
 
     loadTimer = setTimeout(() => {
       audioPlayer.removeEventListener('canplay', onReady);
-      // Intentar reproducir de todos modos (puede funcionar parcialmente)
       doPlay();
     }, LOAD_TIMEOUT);
 
@@ -380,13 +417,100 @@ async function playCurrentPhase() {
 function stopAudio() {
   clearTimeout(state.phaseTimer);
   audioPlayer.pause();
-  audioPlayer.currentTime = state.randomStart ?? 0;  // volver al inicio aleatorio
+  audioPlayer.currentTime = state.randomStart ?? 0;
   state.isPlaying = false;
   playBtnIcon.textContent = '▶';
   playerCard.classList.remove('playing');
   waveform.classList.remove('playing');
+  // Freeze the progress bar at current position
+  const fill = playbackProgressFill;
+  const computed = getComputedStyle(fill).width;
+  const wrapWidth = playbackProgressWrap.offsetWidth;
+  if (wrapWidth > 0) {
+    const pct = (parseFloat(computed) / wrapWidth) * 100;
+    fill.style.transition = 'none';
+    fill.style.width = pct + '%';
+  }
 }
- 
+
+/* ──────────────────────────────────────────
+   LISTEN PREVIEW (feedback card)
+────────────────────────────────────────── */
+function stopPreviewAudio() {
+  if (state.previewAudio) {
+    state.previewAudio.pause();
+    state.previewAudio.src = '';
+    state.previewAudio = null;
+  }
+  state.previewPlaying = false;
+  listenPreviewBtn.classList.remove('playing');
+  listenPreviewBtn.querySelector('.listen-icon').textContent = '▶';
+  listenPreviewBtn.querySelector('.listen-label').textContent = 'Escuchar canción';
+  listenProgressFill.style.transition = 'none';
+  listenProgressFill.style.width = '0%';
+  listenProgressWrap.classList.remove('visible');
+}
+
+listenPreviewBtn.addEventListener('click', () => {
+  if (!state.answered) return;
+
+  if (state.previewPlaying) {
+    stopPreviewAudio();
+    return;
+  }
+
+  const song = state.queue[state.currentIdx];
+  if (!song || !song.preview) {
+    showToast('Preview no disponible', 'error');
+    return;
+  }
+
+  stopPreviewAudio();
+
+  const audio = new Audio();
+  audio.src = song.preview;
+  audio.volume = (state.settings.volume ?? 80) / 100;
+  audio.crossOrigin = 'anonymous';
+
+  state.previewAudio = audio;
+
+  audio.addEventListener('canplay', () => {
+    audio.play().then(() => {
+      state.previewPlaying = true;
+      listenPreviewBtn.classList.add('playing');
+      listenPreviewBtn.querySelector('.listen-icon').textContent = '■';
+      listenPreviewBtn.querySelector('.listen-label').textContent = 'Parar';
+
+      // Animate progress bar over the full preview duration (Deezer ~30s)
+      const dur = audio.duration || 30;
+      listenProgressWrap.classList.add('visible');
+      listenProgressFill.style.transition = 'none';
+      listenProgressFill.style.width = '0%';
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          listenProgressFill.style.transition = `width ${dur}s linear`;
+          listenProgressFill.style.width = '100%';
+        });
+      });
+
+    }).catch(() => {
+      showToast('No se pudo reproducir la preview', 'error');
+      stopPreviewAudio();
+    });
+  }, { once: true });
+
+  audio.addEventListener('ended', () => {
+    stopPreviewAudio();
+  });
+
+  audio.addEventListener('error', () => {
+    showToast('Preview no disponible', 'error');
+    stopPreviewAudio();
+  });
+
+  audio.load();
+});
+
 /* ──────────────────────────────────────────
    Animación waveform
 ────────────────────────────────────────── */
@@ -415,13 +539,11 @@ function setActivePhase(phaseIdx) {
  
 /* ──────────────────────────────────────────
    Pasar fase / No sé
-   "Pasar fase" ahora avanza a la siguiente
-   fase SIN penalizar (respuesta incorrecta
-   solo cuenta si es la última fase o se rinde).
 ────────────────────────────────────────── */
 skipBtn.addEventListener('click', () => {
   if (state.answered) return;
   stopAudio();
+  resetPlaybackProgress();
   clearCountdown();
   guessInput.value = '';
   autocompleteList.classList.add('hidden');
@@ -431,6 +553,7 @@ skipBtn.addEventListener('click', () => {
 giveUpBtn.addEventListener('click', () => {
   if (state.answered) return;
   stopAudio();
+  resetPlaybackProgress();
   clearCountdown();
   resolveRound(false);
 });
@@ -441,7 +564,6 @@ function advancePhase() {
     setActivePhase(state.phase);
     showToast(`Fase ${state.phase + 1}: ${PHASE_DURATIONS[state.phase]} segundos`);
   } else {
-    // Última fase agotada → canción fallada
     resolveRound(false);
   }
 }
@@ -457,7 +579,6 @@ guessInput.addEventListener('input', () => {
     return;
   }
  
-  // Filtrar las canciones del queue por lo que ha escrito el usuario
   const matches = state.queue.filter(s => {
     const title  = normalize(s.title);
     const artist = normalize(s.artist);
@@ -516,21 +637,20 @@ function submitGuess() {
   const correct = isCorrectGuess(answer, song.title, song.artist);
  
   if (!correct) {
-    // Respuesta incorrecta: avanzar fase en vez de penalizar
-    // (solo penaliza si ya estamos en la última fase)
     showToast('Incorrecto, sigue intentándolo…', 'error');
     guessInput.value = '';
     guessInput.focus();
     autocompleteList.classList.add('hidden');
     stopAudio();
+    resetPlaybackProgress();
     clearCountdown();
     advancePhase();
     return;
   }
  
-  // Respuesta correcta
   clearCountdown();
   stopAudio();
+  resetPlaybackProgress();
   resolveRound(true);
 }
  
@@ -601,6 +721,9 @@ function resolveRound(correct) {
    Feedback
 ────────────────────────────────────────── */
 function showFeedback(correct, song, pts) {
+  // Reset listen preview state before showing feedback
+  stopPreviewAudio();
+
   feedbackCard.className     = 'feedback-card ' + (correct ? 'correct' : 'wrong');
   feedbackResult.textContent = correct ? '✓' : '✗';
  
@@ -628,6 +751,7 @@ function showFeedback(correct, song, pts) {
 }
  
 nextSongBtn.addEventListener('click', () => {
+  stopPreviewAudio();
   if (state.currentIdx >= state.queue.length - 1) {
     finishGame();
   } else {
@@ -650,7 +774,7 @@ function startCountdown(seconds) {
     if (state.countdownSec <= 5) hudTimer.style.color = 'var(--danger)';
     if (state.countdownSec <= 0) {
       clearCountdown();
-      advancePhase();   // tiempo agotado → siguiente fase (no penaliza directamente)
+      advancePhase();
     }
   }, 1000);
 }
@@ -666,6 +790,7 @@ function clearCountdown() {
 ────────────────────────────────────────── */
 function finishGame() {
   stopAudio();
+  stopPreviewAudio();
   clearCountdown();
  
   const total    = state.queue.length;
@@ -724,7 +849,6 @@ function renderHistorySongs() {
  
 function renderLeaderboard() {
   leaderboardList.innerHTML = '';
-  // Ordenar por puntuación desc antes de mostrar
   const scores = [...Storage.getScores()]
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
@@ -742,7 +866,6 @@ function renderLeaderboard() {
  
   scores.forEach((s, i) => {
     const item = document.createElement('div');
-    // Marcar la partida recién terminada (misma puntuación y fecha ~igual)
     const isCurrent = s.score === currentScore && (currentDate - s.date) < 5000;
     item.className = 'lb-item' + (isCurrent ? ' current-game' : '');
     const date = new Date(s.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
