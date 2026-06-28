@@ -236,6 +236,7 @@ function loadSong() {
  
   state.phase    = 0;
   state.answered = false;
+  state.audioReady = false;  // FLAG: indica si el audio ya ha bufereado suficiente
  
   const total   = state.queue.length;
   const current = state.currentIdx + 1;
@@ -271,14 +272,24 @@ function loadSong() {
   skipBtn.style.display   = state.settings.skipEnabled ? '' : 'none';
  
   const song = state.queue[state.currentIdx];
-  // Elegir un segundo de inicio aleatorio (0–20) para que
-  // la misma preview suene diferente cada vez.
-  // La preview de Deezer dura ~30 seg, así que con máx 20s
-  // la fase más larga (10s) siempre tiene margen.
   state.randomStart = Math.floor(Math.random() * 21);   // 0-20
+
+  // Precarga del audio: configurar src y empezar a bufferear en silencio
+  // para que cuando el usuario pulse play en fase 1 (0.3s) ya esté listo.
   audioPlayer.removeAttribute('crossorigin');
   audioPlayer.src = song.preview;
+  audioPlayer.volume = 0;          // silencio durante la precarga
+  audioPlayer.currentTime = 0;
   audioPlayer.load();
+
+  // Escuchar canplay para marcar el audio como listo y posicionarlo
+  const onCanPlay = () => {
+    audioPlayer.removeEventListener('canplay', onCanPlay);
+    audioPlayer.currentTime = state.randomStart ?? 0;
+    audioPlayer.volume = 0;        // mantener silencio hasta que el usuario pulse play
+    state.audioReady = true;
+  };
+  audioPlayer.addEventListener('canplay', onCanPlay);
 }
  
 /* ──────────────────────────────────────────
@@ -296,41 +307,74 @@ async function playCurrentPhase() {
  
   playBtn.classList.add('loading');
   playBtnIcon.textContent = '…';
- 
-  try {
-    const results = await DeezerAPI.searchNormalized(`${song.title} ${song.artist}`, 1);
-    if (results.length && results[0].preview) {
-      song.preview = results[0].preview;
-    }
-  } catch { /* usar URL existente */ }
- 
-  audioPlayer.removeAttribute('crossorigin');
-  audioPlayer.src = song.preview;
-  audioPlayer.load();
+
+  // Solo refrescar la URL de Deezer si el audio aún no está listo
+  // (evita una petición de red innecesaria que retrasa la fase 1)
+  if (!state.audioReady) {
+    try {
+      const results = await DeezerAPI.searchNormalized(`${song.title} ${song.artist}`, 1);
+      if (results.length && results[0].preview) {
+        song.preview = results[0].preview;
+      }
+    } catch { /* usar URL existente */ }
+
+    audioPlayer.removeAttribute('crossorigin');
+    audioPlayer.src = song.preview;
+    audioPlayer.load();
+  }
+
   audioPlayer.volume      = (state.settings.volume ?? 80) / 100;
   audioPlayer.currentTime = state.randomStart ?? 0;
+
+  // Función que lanza realmente la reproducción
+  const doPlay = () => {
+    audioPlayer.play().then(() => {
+      state.isPlaying = true;
+      playBtn.classList.remove('loading');
+      playBtnIcon.textContent = '■';
+      playerCard.classList.add('playing');
+      waveform.classList.add('playing');
+      animateWave();
  
-  audioPlayer.play().then(() => {
-    state.isPlaying = true;
-    playBtn.classList.remove('loading');
-    playBtnIcon.textContent = '■';
-    playerCard.classList.add('playing');
-    waveform.classList.add('playing');
-    animateWave();
+      clearTimeout(state.phaseTimer);
+      state.phaseTimer = setTimeout(() => {
+        stopAudio();
+        if (state.settings.timerEnabled && !state.answered) {
+          startCountdown(state.settings.timerSeconds);
+        }
+      }, dur * 1000);
  
-    clearTimeout(state.phaseTimer);
-    state.phaseTimer = setTimeout(() => {
-      stopAudio();
-      if (state.settings.timerEnabled && !state.answered) {
-        startCountdown(state.settings.timerSeconds);
-      }
-    }, dur * 1000);
- 
-  }).catch(() => {
-    playBtn.classList.remove('loading');
-    playBtnIcon.textContent = '▶';
-    showToast('Audio no disponible para esta canción', 'error');
-  });
+    }).catch(() => {
+      playBtn.classList.remove('loading');
+      playBtnIcon.textContent = '▶';
+      showToast('Audio no disponible para esta canción', 'error');
+    });
+  };
+
+  if (state.audioReady) {
+    // El audio ya bufereó durante la carga de la canción → reproducir directo
+    doPlay();
+  } else {
+    // Esperar a canplay con un timeout de seguridad de 5 segundos
+    const LOAD_TIMEOUT = 5000;
+    let loadTimer;
+
+    const onReady = () => {
+      clearTimeout(loadTimer);
+      audioPlayer.removeEventListener('canplay', onReady);
+      audioPlayer.currentTime = state.randomStart ?? 0;
+      state.audioReady = true;
+      doPlay();
+    };
+
+    loadTimer = setTimeout(() => {
+      audioPlayer.removeEventListener('canplay', onReady);
+      // Intentar reproducir de todos modos (puede funcionar parcialmente)
+      doPlay();
+    }, LOAD_TIMEOUT);
+
+    audioPlayer.addEventListener('canplay', onReady);
+  }
 }
  
 function stopAudio() {
