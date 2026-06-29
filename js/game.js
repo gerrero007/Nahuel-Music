@@ -291,19 +291,46 @@ function loadSong() {
   const song = state.queue[state.currentIdx];
   state.randomStart = Math.floor(Math.random() * 21);
 
-  audioPlayer.removeAttribute('crossorigin');
-  audioPlayer.src = song.preview;
-  audioPlayer.volume = 0;
-  audioPlayer.currentTime = 0;
-  audioPlayer.load();
+  // FIX: Limpiar todos los listeners previos clonando el elemento
+  const newAudio = audioPlayer.cloneNode(false);
+  audioPlayer.parentNode.replaceChild(newAudio, audioPlayer);
+  // Re-asignar la referencia global tras el reemplazo
+  Object.defineProperty(window, 'audioPlayer', { value: newAudio, configurable: true, writable: true });
+
+  _setupAudioElement(newAudio, song);
+}
+
+/* ──────────────────────────────────────────
+   FIX: Configurar elemento de audio limpiamente
+────────────────────────────────────────── */
+function _setupAudioElement(audioEl, song) {
+  audioEl.removeAttribute('crossorigin');
+  audioEl.preload = 'auto';
+  audioEl.volume  = 0;
 
   const onCanPlay = () => {
-    audioPlayer.removeEventListener('canplay', onCanPlay);
-    audioPlayer.currentTime = state.randomStart ?? 0;
-    audioPlayer.volume = 0;
+    audioEl.removeEventListener('canplay', onCanPlay);
+    audioEl.removeEventListener('error',   onError);
+    // Aplicar randomStart solo cuando el audio está realmente listo
+    try {
+      audioEl.currentTime = state.randomStart ?? 0;
+    } catch (_) { /* algunos navegadores lanzan si la duración es desconocida */ }
+    audioEl.volume = 0;
     state.audioReady = true;
   };
-  audioPlayer.addEventListener('canplay', onCanPlay);
+
+  const onError = () => {
+    audioEl.removeEventListener('canplay', onCanPlay);
+    audioEl.removeEventListener('error',   onError);
+    // No marcamos audioReady = true; playCurrentPhase lo gestionará
+    state.audioReady = false;
+  };
+
+  audioEl.addEventListener('canplay', onCanPlay);
+  audioEl.addEventListener('error',   onError);
+
+  audioEl.src = song.preview;
+  audioEl.load();
 }
  
 /* ──────────────────────────────────────────
@@ -346,6 +373,7 @@ async function playCurrentPhase() {
   playBtn.classList.add('loading');
   playBtnIcon.textContent = '…';
 
+  // FIX: Si el audio falló al cargar, intentar obtener una URL nueva de Deezer
   if (!state.audioReady) {
     try {
       const results = await DeezerAPI.searchNormalized(`${song.title} ${song.artist}`, 1);
@@ -354,67 +382,78 @@ async function playCurrentPhase() {
       }
     } catch { /* usar URL existente */ }
 
-    audioPlayer.removeAttribute('crossorigin');
-    audioPlayer.src = song.preview;
-    audioPlayer.load();
-  }
+    // Re-configurar el audio con la (posiblemente nueva) URL
+    await new Promise(resolve => {
+      const el = audioPlayer;
+      el.removeAttribute('crossorigin');
+      el.volume = 0;
 
-  audioPlayer.volume      = (state.settings.volume ?? 80) / 100;
-  audioPlayer.currentTime = state.randomStart ?? 0;
+      const onReady = () => {
+        el.removeEventListener('canplay', onReady);
+        el.removeEventListener('error',   onFail);
+        try { el.currentTime = state.randomStart ?? 0; } catch (_) {}
+        state.audioReady = true;
+        resolve();
+      };
+      const onFail = () => {
+        el.removeEventListener('canplay', onReady);
+        el.removeEventListener('error',   onFail);
+        resolve(); // continuar igualmente; play() fallará y mostrará toast
+      };
 
-  const doPlay = () => {
-    audioPlayer.play().then(() => {
-      state.isPlaying = true;
-      playBtn.classList.remove('loading');
-      playBtnIcon.textContent = '■';
-      playerCard.classList.add('playing');
-      waveform.classList.add('playing');
-      animateWave();
+      const LOAD_TIMEOUT = 6000;
+      const timer = setTimeout(() => {
+        el.removeEventListener('canplay', onReady);
+        el.removeEventListener('error',   onFail);
+        resolve();
+      }, LOAD_TIMEOUT);
 
-      startPlaybackProgress(dur);
- 
-      clearTimeout(state.phaseTimer);
-      state.phaseTimer = setTimeout(() => {
-        stopAudio();
-        if (state.settings.timerEnabled && !state.answered) {
-          startCountdown(state.settings.timerSeconds);
-        }
-      }, dur * 1000);
- 
-    }).catch(() => {
-      playBtn.classList.remove('loading');
-      playBtnIcon.textContent = '▶';
-      showToast('Audio no disponible para esta canción', 'error');
+      // Limpiar el timeout si alguno de los listeners se dispara
+      const cleanup = () => clearTimeout(timer);
+      el.addEventListener('canplay', () => { cleanup(); onReady(); }, { once: true });
+      el.addEventListener('error',   () => { cleanup(); onFail();  }, { once: true });
+
+      el.src = song.preview;
+      el.load();
     });
-  };
-
-  if (state.audioReady) {
-    doPlay();
-  } else {
-    const LOAD_TIMEOUT = 5000;
-    let loadTimer;
-
-    const onReady = () => {
-      clearTimeout(loadTimer);
-      audioPlayer.removeEventListener('canplay', onReady);
-      audioPlayer.currentTime = state.randomStart ?? 0;
-      state.audioReady = true;
-      doPlay();
-    };
-
-    loadTimer = setTimeout(() => {
-      audioPlayer.removeEventListener('canplay', onReady);
-      doPlay();
-    }, LOAD_TIMEOUT);
-
-    audioPlayer.addEventListener('canplay', onReady);
   }
+
+  // Asegurarse de que currentTime está en el punto correcto antes de reproducir
+  audioPlayer.volume = (state.settings.volume ?? 80) / 100;
+  try {
+    audioPlayer.currentTime = state.randomStart ?? 0;
+  } catch (_) {}
+
+  audioPlayer.play().then(() => {
+    state.isPlaying = true;
+    playBtn.classList.remove('loading');
+    playBtnIcon.textContent = '■';
+    playerCard.classList.add('playing');
+    waveform.classList.add('playing');
+    animateWave();
+
+    startPlaybackProgress(dur);
+
+    clearTimeout(state.phaseTimer);
+    state.phaseTimer = setTimeout(() => {
+      stopAudio();
+      if (state.settings.timerEnabled && !state.answered) {
+        startCountdown(state.settings.timerSeconds);
+      }
+    }, dur * 1000);
+
+  }).catch(() => {
+    playBtn.classList.remove('loading');
+    playBtnIcon.textContent = '▶';
+    state.audioReady = false; // marcar para reintentar carga la próxima vez
+    showToast('Audio no disponible para esta canción', 'error');
+  });
 }
  
 function stopAudio() {
   clearTimeout(state.phaseTimer);
   audioPlayer.pause();
-  audioPlayer.currentTime = state.randomStart ?? 0;
+  try { audioPlayer.currentTime = state.randomStart ?? 0; } catch (_) {}
   state.isPlaying = false;
   playBtnIcon.textContent = '▶';
   playerCard.classList.remove('playing');
@@ -653,7 +692,19 @@ function submitGuess() {
   resolveRound(true);
 }
  
-/* ── Comparación flexible ── */
+/* ──────────────────────────────────────────
+   FIX: Comparación flexible pero estricta
+   
+   Reglas (de más a menos estricta):
+   1. Coincidencia exacta normalizada              → correcto
+   2. El título está completamente contenido en la
+      respuesta (y tiene ≥ 4 chars)                → correcto
+   3. La respuesta está completamente contenida en
+      el título Y cubre ≥ 60 % de sus caracteres   → correcto
+   4. Coincidencia de palabras significativas:
+      ≥ 80 % de las palabras del título (> 3 chars)
+      aparecen en la respuesta con similitud alta   → correcto
+────────────────────────────────────────── */
 function normalize(str) {
   return String(str).toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -661,22 +712,44 @@ function normalize(str) {
     .replace(/\s+/g, ' ')
     .trim();
 }
- 
+
 function isCorrectGuess(answer, title, artist) {
-  const a  = normalize(answer);
-  const t  = normalize(title);
- 
+  const a = normalize(answer);
+  const t = normalize(title);
+
+  // Evitar respuestas vacías tras normalizar
+  if (!a || !t) return false;
+
+  // 1. Coincidencia exacta
   if (a === t) return true;
-  if (t.includes(a) && a.length >= 3) return true;
-  if (a.includes(t) && t.length >= 3) return true;
- 
-  const titleWords  = t.split(' ').filter(w => w.length > 2);
-  const answerWords = a.split(' ');
+
+  // 2. El título completo está dentro de la respuesta
+  //    (p.ej. el usuario escribió más de lo necesario)
+  if (t.length >= 4 && a.includes(t)) return true;
+
+  // 3. La respuesta está dentro del título Y es suficientemente larga
+  //    Mínimo: 5 chars Y cubre al menos el 60 % del título
+  if (a.length >= 5 && t.includes(a) && a.length / t.length >= 0.6) return true;
+
+  // 4. Coincidencia de palabras significativas (> 3 chars)
+  //    Umbral elevado al 80 % para evitar falsos positivos
+  const titleWords = t.split(' ').filter(w => w.length > 3);
   if (titleWords.length > 0) {
-    const matches = titleWords.filter(w => answerWords.some(aw => aw.includes(w) || w.includes(aw)));
-    if (matches.length / titleWords.length >= 0.7) return true;
+    const answerWords = a.split(' ');
+    const matched = titleWords.filter(tw =>
+      answerWords.some(aw => {
+        // Coincidencia exacta entre palabras individuales
+        if (aw === tw) return true;
+        // Una contiene a la otra, pero ambas deben tener ≥ 4 chars
+        if (aw.length >= 4 && tw.length >= 4) {
+          return aw.includes(tw) || tw.includes(aw);
+        }
+        return false;
+      })
+    );
+    if (matched.length / titleWords.length >= 0.8) return true;
   }
- 
+
   return false;
 }
  
