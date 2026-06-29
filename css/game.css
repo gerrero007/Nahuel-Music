@@ -906,3 +906,79 @@
   .guess-actions { flex-wrap: wrap; }
   .lb-song-artist { display: none; }
 }
+
+/* ═══════════════════════════════════════════════
+   AÑADIR AL FINAL DE game.css
+   Banner de reanudación de partida
+   ═══════════════════════════════════════════════ */
+
+.resume-banner {
+  position: fixed;
+  top: 60px;          /* justo debajo del navbar */
+  left: 0;
+  right: 0;
+  z-index: 200;
+  padding: 0 1rem;
+  pointer-events: none;
+}
+
+.resume-banner.hidden {
+  display: none;
+}
+
+.resume-banner-inner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  max-width: 720px;
+  margin: 0.75rem auto 0;
+  padding: 0.85rem 1.25rem;
+  background: var(--surface-2, #1e1e2e);
+  border: 1px solid var(--accent, #7c3aed);
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.35);
+  pointer-events: all;
+}
+
+.resume-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.resume-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.resume-text strong {
+  font-size: 0.9rem;
+  color: var(--text, #fff);
+}
+
+.resume-info {
+  font-size: 0.78rem;
+  color: var(--text-muted, #888);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.resume-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* Responsive: apilar en móvil */
+@media (max-width: 520px) {
+  .resume-banner-inner {
+    flex-wrap: wrap;
+  }
+  .resume-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

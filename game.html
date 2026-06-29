@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SoundGuess – Jugar</title>
+  <title>ByNahuel – Jugar</title>
   <link rel="stylesheet" href="css/theme.css" />
   <link rel="stylesheet" href="css/game.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -15,7 +15,7 @@
   <nav class="navbar">
     <a href="index.html" class="nav-brand">
       <span class="brand-icon">◈</span>
-      <span class="brand-name">SoundGuess</span>
+      <span class="brand-name">ByNahuel</span>
     </a>
     <div class="nav-links">
       <a href="index.html" class="nav-link">Inicio</a>
@@ -23,6 +23,21 @@
       <a href="config.html" class="nav-link">Ajustes</a>
     </div>
   </nav>
+
+  <!-- ══════════ BANNER: Reanudar partida ══════════ -->
+  <div id="resumeBanner" class="resume-banner hidden" role="alert">
+    <div class="resume-banner-inner">
+      <span class="resume-icon">⏸</span>
+      <div class="resume-text">
+        <strong>Tienes una partida en curso</strong>
+        <span id="resumeInfo" class="resume-info"></span>
+      </div>
+      <div class="resume-actions">
+        <button id="resumeYesBtn" class="btn btn-primary">Continuar</button>
+        <button id="resumeNoBtn"  class="btn btn-ghost">Descartar</button>
+      </div>
+    </div>
+  </div>
  
   <main class="game-main">
  

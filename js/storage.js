@@ -66,9 +66,13 @@ const Storage = (() => {
     const list = getPlaylists();
     const pl   = list.find(p => p.id === playlistId);
     if (!pl) return false;
-    if (pl.songs.some(s => s.id === song.id)) return 'duplicate';
+
+    // FIX: Normalizar el ID a string para comparación consistente
+    const songId = String(song.id);
+    if (pl.songs.some(s => String(s.id) === songId)) return 'duplicate';
+
     pl.songs.push({
-      id      : song.id,
+      id      : songId,   // FIX: guardar siempre como string
       title   : song.title,
       artist  : song.artist?.name || song.artist || 'Desconocido',
       cover   : song.album?.cover_medium || song.cover || '',
@@ -82,7 +86,11 @@ const Storage = (() => {
     const list = getPlaylists();
     const pl   = list.find(p => p.id === playlistId);
     if (!pl) return false;
-    pl.songs = pl.songs.filter(s => s.id !== songId);
+
+    // FIX: Comparar como strings para que funcione tanto con IDs numéricos
+    //      (canciones añadidas desde Deezer) como con strings (Spotify, etc.)
+    const normalizedId = String(songId);
+    pl.songs = pl.songs.filter(s => String(s.id) !== normalizedId);
     savePlaylists(list);
     return true;
   }

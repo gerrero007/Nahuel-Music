@@ -15,6 +15,49 @@ const POINTS = {
   streak2 : 100,
   streak4 : 200,
 };
+
+/* ──────────────────────────────────────────
+   Clave de sessionStorage para la partida
+────────────────────────────────────────── */
+const SESSION_KEY = 'sg_active_game';
+
+/* ──────────────────────────────────────────
+   Guardar / cargar / limpiar sesión de partida
+────────────────────────────────────────── */
+function saveGameSession() {
+  // No guardar si no hay partida activa o ya terminó
+  if (state.screen !== 'game') return;
+  try {
+    const snap = {
+      playlist   : state.playlist,
+      queue      : state.queue,
+      currentIdx : state.currentIdx,
+      phase      : state.phase,
+      score      : state.score,
+      streak     : state.streak,
+      bestStreak : state.bestStreak,
+      correct    : state.correct,
+      wrong      : state.wrong,
+      phasesUsed : state.phasesUsed,
+      history    : state.history,
+      answered   : state.answered,
+      settings   : state.settings,
+      randomStart: state.randomStart,
+    };
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(snap));
+  } catch { /* quota exceeded u otro error: ignorar */ }
+}
+
+function loadGameSession() {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function clearGameSession() {
+  sessionStorage.removeItem(SESSION_KEY);
+}
  
 /* ──────────────────────────────────────────
    Estado del juego
@@ -110,6 +153,14 @@ const leaderboardList   = $('leaderboardList');
 const playAgainBtn      = $('playAgainBtn');
  
 const toast = $('toast');
+
+/* ──────────────────────────────────────────
+   Banner de sesión guardada
+────────────────────────────────────────── */
+const resumeBanner     = $('resumeBanner');
+const resumeInfo       = $('resumeInfo');
+const resumeYesBtn     = $('resumeYesBtn');
+const resumeNoBtn      = $('resumeNoBtn');
  
 /* ──────────────────────────────────────────
    Toast
@@ -190,6 +241,9 @@ startGameBtn.addEventListener('click', async () => {
     showToast('No se encontraron suficientes canciones con preview en Deezer (mínimo 3)', 'error');
     return;
   }
+
+  // Al iniciar nueva partida, borrar sesión anterior
+  clearGameSession();
   startGame(songs);
 });
  
@@ -241,9 +295,132 @@ function startGame(songs) {
   showScreen('game');
   loadSong();
 }
+
+/* ──────────────────────────────────────────
+   JUEGO: restaurar partida desde sesión
+────────────────────────────────────────── */
+function restoreGame(snap) {
+  state.settings   = snap.settings || Storage.getSettings();
+  state.playlist   = snap.playlist;
+  state.queue      = snap.queue;
+  state.currentIdx = snap.currentIdx;
+  state.score      = snap.score;
+  state.streak     = snap.streak;
+  state.bestStreak = snap.bestStreak;
+  state.correct    = snap.correct;
+  state.wrong      = snap.wrong;
+  state.phasesUsed = snap.phasesUsed;
+  state.history    = snap.history;
+  state.answered   = snap.answered;
+  state.randomStart = snap.randomStart;
+
+  showScreen('game');
+
+  // Actualizar HUD con el estado guardado
+  const total   = state.queue.length;
+  const current = state.currentIdx + 1;
+  hudSong.textContent   = `${current} / ${total}`;
+  hudScore.textContent  = state.score;
+  hudStreak.textContent = `🔥 ${state.streak}`;
+  progressBarFill.style.width = `${((current - 1) / total) * 100}%`;
+
+  if (state.settings.timerEnabled) {
+    hudTimerBlock.classList.remove('hidden');
+  } else {
+    hudTimerBlock.classList.add('hidden');
+  }
+
+  if (state.answered) {
+    // La canción ya estaba respondida: mostrar feedback y esperar "Siguiente"
+    restoreFeedback();
+  } else {
+    // Canción sin responder: cargar normalmente (sin reproducir)
+    loadSongUI();
+  }
+}
+
+/* Restaura visualmente el feedback de la última canción respondida */
+function restoreFeedback() {
+  const last = state.history[state.history.length - 1];
+  if (!last) { loadSongUI(); return; }
+
+  stopAudio();
+  stopPreviewAudio();
+  resetPlaybackProgress();
+
+  setActivePhase(state.phase);
+  phaseSteps.forEach((el, i) => {
+    if (!el) return;
+    const p = i - 1;
+    if (p < state.phase) el.className = 'phase-step done';
+    else if (p === state.phase) el.className = 'phase-step active';
+    else el.className = 'phase-step';
+  });
+
+  guessInput.disabled     = true;
+  skipBtn.disabled        = true;
+  giveUpBtn.disabled      = true;
+  submitGuessBtn.disabled = true;
+
+  showFeedback(last.correct, last.song, last.points);
+}
+
+/* Prepara la UI para una canción sin reproducirla aún */
+function loadSongUI() {
+  stopAudio();
+  stopPreviewAudio();
+  clearCountdown();
+  resetPlaybackProgress();
+
+  state.phase    = 0;
+  state.answered = false;
+  state.audioReady = false;
+
+  const total   = state.queue.length;
+  const current = state.currentIdx + 1;
+
+  hudSong.textContent   = `${current} / ${total}`;
+  hudScore.textContent  = state.score;
+  hudStreak.textContent = `🔥 ${state.streak}`;
+  progressBarFill.style.width = `${((current - 1) / total) * 100}%`;
+
+  if (state.settings.timerEnabled) {
+    hudTimerBlock.classList.remove('hidden');
+  } else {
+    hudTimerBlock.classList.add('hidden');
+  }
+
+  phaseSteps.forEach(el => { if (el) el.classList.remove('active', 'done'); });
+  setActivePhase(0);
+
+  playerCard.classList.remove('playing');
+  waveform.classList.remove('playing');
+  playBtnIcon.textContent = '▶';
+  playBtn.classList.remove('loading', 'disabled');
+  playBtn.disabled = false;
+
+  feedbackArea.classList.add('hidden');
+  guessInput.value    = '';
+  guessInput.disabled = false;
+  autocompleteList.classList.add('hidden');
+
+  skipBtn.disabled        = false;
+  giveUpBtn.disabled      = false;
+  submitGuessBtn.disabled = false;
+  skipBtn.style.display   = state.settings.skipEnabled ? '' : 'none';
+
+  const song = state.queue[state.currentIdx];
+  state.randomStart = state.randomStart ?? Math.floor(Math.random() * 21);
+
+  const newAudio = audioPlayer.cloneNode(false);
+  audioPlayer.parentNode.replaceChild(newAudio, audioPlayer);
+  Object.defineProperty(window, 'audioPlayer', { value: newAudio, configurable: true, writable: true });
+
+  _setupAudioElement(newAudio, song);
+}
  
 /* ──────────────────────────────────────────
-   JUEGO: cargar canción actual
+   JUEGO: cargar canción actual (nueva canción)
 ────────────────────────────────────────── */
 function loadSong() {
   stopAudio();
@@ -291,6 +468,9 @@ function loadSong() {
   const song = state.queue[state.currentIdx];
   state.randomStart = Math.floor(Math.random() * 21);
 
+  // Guardar sesión al cargar cada nueva canción
+  saveGameSession();
+
   // FIX: Limpiar todos los listeners previos clonando el elemento
   const newAudio = audioPlayer.cloneNode(false);
   audioPlayer.parentNode.replaceChild(newAudio, audioPlayer);
@@ -311,10 +491,9 @@ function _setupAudioElement(audioEl, song) {
   const onCanPlay = () => {
     audioEl.removeEventListener('canplay', onCanPlay);
     audioEl.removeEventListener('error',   onError);
-    // Aplicar randomStart solo cuando el audio está realmente listo
     try {
       audioEl.currentTime = state.randomStart ?? 0;
-    } catch (_) { /* algunos navegadores lanzan si la duración es desconocida */ }
+    } catch (_) {}
     audioEl.volume = 0;
     state.audioReady = true;
   };
@@ -322,7 +501,6 @@ function _setupAudioElement(audioEl, song) {
   const onError = () => {
     audioEl.removeEventListener('canplay', onCanPlay);
     audioEl.removeEventListener('error',   onError);
-    // No marcamos audioReady = true; playCurrentPhase lo gestionará
     state.audioReady = false;
   };
 
@@ -338,14 +516,14 @@ function _setupAudioElement(audioEl, song) {
 ────────────────────────────────────────── */
 function startPlaybackProgress(durationSec) {
   cancelAnimationFrame(state.playbackRAF);
-  state.playbackDur   = durationSec * 1000; // ms
+  state.playbackDur   = durationSec * 1000;
   state.playbackStart = performance.now();
 
   playbackProgressFill.style.transition = 'none';
   playbackProgressFill.style.width = '0%';
   playbackProgressWrap.classList.add('visible');
 
-  void playbackProgressFill.offsetWidth; // fuerza reflow
+  void playbackProgressFill.offsetWidth;
   playbackProgressFill.style.transition = `width ${durationSec}s linear`;
   playbackProgressFill.style.width = '110%';
 }
@@ -373,7 +551,6 @@ async function playCurrentPhase() {
   playBtn.classList.add('loading');
   playBtnIcon.textContent = '…';
 
-  // FIX: Si el audio falló al cargar, intentar obtener una URL nueva de Deezer
   if (!state.audioReady) {
     try {
       const results = await DeezerAPI.searchNormalized(`${song.title} ${song.artist}`, 1);
@@ -382,7 +559,6 @@ async function playCurrentPhase() {
       }
     } catch { /* usar URL existente */ }
 
-    // Re-configurar el audio con la (posiblemente nueva) URL
     await new Promise(resolve => {
       const el = audioPlayer;
       el.removeAttribute('crossorigin');
@@ -398,7 +574,7 @@ async function playCurrentPhase() {
       const onFail = () => {
         el.removeEventListener('canplay', onReady);
         el.removeEventListener('error',   onFail);
-        resolve(); // continuar igualmente; play() fallará y mostrará toast
+        resolve();
       };
 
       const LOAD_TIMEOUT = 6000;
@@ -408,7 +584,6 @@ async function playCurrentPhase() {
         resolve();
       }, LOAD_TIMEOUT);
 
-      // Limpiar el timeout si alguno de los listeners se dispara
       const cleanup = () => clearTimeout(timer);
       el.addEventListener('canplay', () => { cleanup(); onReady(); }, { once: true });
       el.addEventListener('error',   () => { cleanup(); onFail();  }, { once: true });
@@ -418,7 +593,6 @@ async function playCurrentPhase() {
     });
   }
 
-  // Asegurarse de que currentTime está en el punto correcto antes de reproducir
   audioPlayer.volume = (state.settings.volume ?? 80) / 100;
   try {
     audioPlayer.currentTime = state.randomStart ?? 0;
@@ -445,7 +619,7 @@ async function playCurrentPhase() {
   }).catch(() => {
     playBtn.classList.remove('loading');
     playBtnIcon.textContent = '▶';
-    state.audioReady = false; // marcar para reintentar carga la próxima vez
+    state.audioReady = false;
     showToast('Audio no disponible para esta canción', 'error');
   });
 }
@@ -596,6 +770,8 @@ function advancePhase() {
   if (state.phase < PHASE_DURATIONS.length - 1) {
     state.phase++;
     setActivePhase(state.phase);
+    // Guardar sesión al cambiar de fase
+    saveGameSession();
     showToast(`Fase ${state.phase + 1}: ${PHASE_DURATIONS[state.phase]} segundos`);
   } else {
     resolveRound(false);
@@ -603,8 +779,7 @@ function advancePhase() {
 }
  
 /* ──────────────────────────────────────────
-   Autocomplete — todas las canciones de la playlist
-   (no solo las seleccionadas para esta ronda)
+   Autocomplete
 ────────────────────────────────────────── */
 guessInput.addEventListener('input', () => {
   const val = guessInput.value.trim().toLowerCase();
@@ -614,7 +789,6 @@ guessInput.addEventListener('input', () => {
     return;
   }
 
-  // Buscar en TODAS las canciones de la playlist, no solo en state.queue
   const allSongs = state.playlist ? state.playlist.songs : state.queue;
 
   const matches = allSongs.filter(s => {
@@ -693,17 +867,7 @@ function submitGuess() {
 }
  
 /* ──────────────────────────────────────────
-   FIX: Comparación flexible pero estricta
-   
-   Reglas (de más a menos estricta):
-   1. Coincidencia exacta normalizada              → correcto
-   2. El título está completamente contenido en la
-      respuesta (y tiene ≥ 4 chars)                → correcto
-   3. La respuesta está completamente contenida en
-      el título Y cubre ≥ 60 % de sus caracteres   → correcto
-   4. Coincidencia de palabras significativas:
-      ≥ 80 % de las palabras del título (> 3 chars)
-      aparecen en la respuesta con similitud alta   → correcto
+   Comparación flexible
 ────────────────────────────────────────── */
 function normalize(str) {
   return String(str).toLowerCase()
@@ -717,30 +881,17 @@ function isCorrectGuess(answer, title, artist) {
   const a = normalize(answer);
   const t = normalize(title);
 
-  // Evitar respuestas vacías tras normalizar
   if (!a || !t) return false;
-
-  // 1. Coincidencia exacta
   if (a === t) return true;
-
-  // 2. El título completo está dentro de la respuesta
-  //    (p.ej. el usuario escribió más de lo necesario)
   if (t.length >= 4 && a.includes(t)) return true;
-
-  // 3. La respuesta está dentro del título Y es suficientemente larga
-  //    Mínimo: 5 chars Y cubre al menos el 60 % del título
   if (a.length >= 5 && t.includes(a) && a.length / t.length >= 0.6) return true;
 
-  // 4. Coincidencia de palabras significativas (> 3 chars)
-  //    Umbral elevado al 80 % para evitar falsos positivos
   const titleWords = t.split(' ').filter(w => w.length > 3);
   if (titleWords.length > 0) {
     const answerWords = a.split(' ');
     const matched = titleWords.filter(tw =>
       answerWords.some(aw => {
-        // Coincidencia exacta entre palabras individuales
         if (aw === tw) return true;
-        // Una contiene a la otra, pero ambas deben tener ≥ 4 chars
         if (aw.length >= 4 && tw.length >= 4) {
           return aw.includes(tw) || tw.includes(aw);
         }
@@ -785,6 +936,9 @@ function resolveRound(correct) {
   skipBtn.disabled          = true;
   giveUpBtn.disabled        = true;
   submitGuessBtn.disabled   = true;
+
+  // Guardar sesión tras responder (estado answered = true)
+  saveGameSession();
  
   showFeedback(correct, song, pts);
 }
@@ -863,6 +1017,9 @@ function finishGame() {
   stopAudio();
   stopPreviewAudio();
   clearCountdown();
+
+  // Borrar sesión: la partida terminó
+  clearGameSession();
  
   const total    = state.queue.length;
   const correct  = state.correct;
@@ -872,11 +1029,10 @@ function finishGame() {
     ? (phasesOk.reduce((a, b) => a + b, 0) / phasesOk.length).toFixed(1)
     : '-';
 
-  // Historial compacto: solo título, artista, fase y acierto
   const songHistory = state.history.map(h => ({
-    t: h.song.title,   // title
-    a: h.song.artist,  // artist
-    p: h.phase,        // phase (0 = no acertada)
+    t: h.song.title,
+    a: h.song.artist,
+    p: h.phase,
     c: h.correct ? 1 : 0,
   }));
  
@@ -950,7 +1106,6 @@ function renderLeaderboard() {
     item.className = 'lb-item' + (isCurrent ? ' current-game' : '');
     const date = new Date(s.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
 
-    // Botón expandir historial de canciones si hay datos
     const hasSongs = s.songs && s.songs.length > 0;
 
     item.innerHTML = `
@@ -966,7 +1121,6 @@ function renderLeaderboard() {
     `;
 
     if (hasSongs) {
-      // Panel de canciones colapsable
       const songPanel = document.createElement('div');
       songPanel.className = 'lb-song-panel hidden';
       songPanel.innerHTML = s.songs.map(song => `
@@ -998,6 +1152,7 @@ function renderLeaderboard() {
    Jugar de nuevo
 ────────────────────────────────────────── */
 playAgainBtn.addEventListener('click', () => {
+  clearGameSession();
   if (!state.playlist) { showScreen('lobby'); initLobby(); return; }
   const songs = state.playlist.songs.filter(s => s.preview);
   startGame(songs);
@@ -1021,7 +1176,41 @@ function escHtml(str) {
 }
  
 /* ──────────────────────────────────────────
-   Init
+   Init: comprobar sesión guardada
 ────────────────────────────────────────── */
-showScreen('lobby');
-initLobby();
+(function init() {
+  const snap = loadGameSession();
+
+  if (snap && snap.queue && snap.queue.length > 0) {
+    // Hay una partida en curso: mostrar banner de reanudación
+    const pl        = snap.playlist;
+    const current   = snap.currentIdx + 1;
+    const total     = snap.queue.length;
+    const pct       = total ? Math.round(((current - 1) / total) * 100) : 0;
+
+    resumeInfo.textContent =
+      `${pl.emoji} ${pl.name} · Canción ${current}/${total} · ${snap.score} pts`;
+
+    resumeBanner.classList.remove('hidden');
+
+    resumeYesBtn.addEventListener('click', () => {
+      resumeBanner.classList.add('hidden');
+      restoreGame(snap);
+    });
+
+    resumeNoBtn.addEventListener('click', () => {
+      clearGameSession();
+      resumeBanner.classList.add('hidden');
+      showScreen('lobby');
+      initLobby();
+    });
+
+    // Mostrar lobby detrás del banner mientras decide
+    showScreen('lobby');
+    initLobby();
+
+  } else {
+    showScreen('lobby');
+    initLobby();
+  }
+})();
